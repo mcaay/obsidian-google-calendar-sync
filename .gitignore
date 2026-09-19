@@ -1,0 +1,10 @@
+node_modules/
+main.js
+*.map
+dist/
+coverage/
+data.json
+.env*
+.DS_Store
+test-results/
+output/

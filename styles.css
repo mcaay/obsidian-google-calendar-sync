@@ -1,0 +1,10 @@
+.gdn-status {
+    max-width: 25rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gdn-connection-status {
+    color: var(--text-muted);
+}
