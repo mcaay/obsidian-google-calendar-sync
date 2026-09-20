@@ -1,6 +1,8 @@
 # Google Calendar Sync by mcaay
 
-[![Watch the walkthrough on YouTube](https://img.youtube.com/vi/RmP0dOEpyMs/maxresdefault.jpg)](https://www.youtube.com/watch?v=RmP0dOEpyMs)
+https://github.com/user-attachments/assets/c41bc686-8dbc-4714-b647-b818ded88183
+
+[Watch on YouTube](https://www.youtube.com/watch?v=RmP0dOEpyMs)
 
 Google Calendar and Google Tasks in your Obsidian daily notes. Real Markdown rows: edit titles, tick checkboxes and add tasks with your keyboard, including Vim.
 
