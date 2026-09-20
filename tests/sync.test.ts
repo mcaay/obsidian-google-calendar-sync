@@ -8,10 +8,11 @@ import { DATE, EMPTY, PATH, event, item, seeded } from './fixtures';
 function harness(items: Item[] = [item()]) {
     const seed = seeded(items);
     const state = { text: seed.text, indent: '    ', now: 100000 };
+    let createdCount = 0;
     const remote: Remote = {
         load: vi.fn(async () => structuredClone(items)),
         patch: vi.fn(async operation => {
-            const target = items.find(value => value.key === operation.key);
+            const target = items.find(value => value.kind === operation.kind && value.source === operation.source && value.id === operation.id);
             if (target) {
                 if (operation.title !== undefined) target.title = operation.title;
                 if (operation.done !== undefined) target.done = operation.done;
@@ -19,8 +20,9 @@ function harness(items: Item[] = [item()]) {
         }),
         create: vi.fn(async (operation, beforeInsert) => {
             if (await beforeInsert() === false) return undefined;
-            items.push(item({ id: 'created', title: operation.title, done: operation.done }));
-            return { id: 'created', source: 'list' };
+            const id = ++createdCount === 1 ? 'created' : `created-${createdCount}`;
+            items.push(item({ id, source: operation.source, title: operation.title, done: operation.done, date: operation.create!.date }));
+            return { id, source: operation.source };
         }),
         removeCreationMarker: vi.fn(async () => undefined),
         remove: vi.fn(async operation => {
@@ -238,8 +240,8 @@ describe('synchronization', () => {
         expect(h.data.notes[PATH]!.rows[target.key]).toEqual(target);
         expect(h.engine.undoableDeletions(PATH)).toEqual([target.key]);
         h.state.now++;
-        expect(h.engine.undoableDeletions(PATH)).toEqual([]);
-        h.engine.cancelDeletions(PATH, [target.key]);
+        expect(h.engine.undoableDeletions(PATH)).toEqual(kind === 'task' ? [target.key] : []);
+        h.engine.restoreDeletions(PATH, [target.key]);
         expect(await h.engine.run(PATH, true)).toBe('Up to date');
         expect(h.remote.remove).toHaveBeenCalledOnce();
         expect(h.data.notes[PATH]!.rows[target.key]).toBeUndefined();
@@ -253,7 +255,7 @@ describe('synchronization', () => {
         await h.engine.run(PATH, true);
         h.state.now += 4999;
         h.state.text = original;
-        h.engine.cancelDeletions(PATH, [item().key]);
+        h.engine.restoreDeletions(PATH, [item().key]);
         await h.engine.run(PATH, true);
         h.state.now += 10000;
         await h.engine.run(PATH, true);
@@ -296,11 +298,193 @@ describe('synchronization', () => {
         h.state.text = edited.split('\n').filter(line => !line.includes(item().key)).join('\n');
         h.engine.queueDeletions(PATH, [item().key]);
         h.state.text = edited;
-        h.engine.cancelDeletions(PATH, [item().key]);
+        h.engine.restoreDeletions(PATH, [item().key]);
         expect(h.data.outbox[item().key]).toMatchObject({ title: 'Buy tea', done: true });
         await h.engine.run(PATH, true);
         expect(h.remote.remove).not.toHaveBeenCalled();
         expect(h.items[0]).toMatchObject({ title: 'Buy tea', done: true });
+    });
+    it('recreates a late-undone task once with its original list, date, title and status', async () => {
+        const original = item({ source: 'another-list', date: '2026-09-17', done: true, title: '📅 13:00 Buy tea' });
+        const h = harness([original]);
+        const text = h.state.text;
+        h.state.text = text.split('\n').filter(line => !line.includes(original.key)).join('\n');
+        h.engine.queueDeletions(PATH, [original.key]);
+        h.state.now += 5000;
+        await h.engine.run(PATH, true);
+        h.state.text = text;
+        h.engine.restoreDeletions(PATH, [original.key]);
+        await h.engine.run(PATH, false);
+        const newKey = original.key;
+        expect(h.remote.create).toHaveBeenCalledOnce();
+        expect(vi.mocked(h.remote.create).mock.calls[0]![0]).toMatchObject({
+            title: original.title, done: true, source: 'another-list', create: { date: '2026-09-17' }, replaces: original.key,
+        });
+        expect(h.state.text).toContain(newKey);
+        expect(h.data.notes[PATH]!.rows[original.key]!.id).toBe('created');
+        expect(h.data.notes[PATH]!.retained).toContain(newKey);
+        expect(h.remote.load).toHaveBeenLastCalledWith(DATE, h.data.settings, [itemKey('task', 'another-list', 'created')]);
+        await h.engine.run(PATH, true);
+        expect(h.remote.create).toHaveBeenCalledOnce();
+    });
+    it('does not recreate a deleted task from stale text without an explicit undo', async () => {
+        const h = harness();
+        const text = h.state.text;
+        h.state.text = text.split('\n').filter(line => !line.includes(item().key)).join('\n');
+        h.engine.queueDeletions(PATH, [item().key]);
+        h.state.now += 5000;
+        await h.engine.run(PATH, true);
+        h.state.text = text;
+        await h.engine.run(PATH, true);
+        expect(h.remote.create).not.toHaveBeenCalled();
+        expect(h.state.text).not.toContain('Buy coffee');
+    });
+    it('waits for an offline deletion before creating its replacement, including after restart', async () => {
+        const h = harness();
+        const text = h.state.text;
+        h.state.text = text.split('\n').filter(line => !line.includes(item().key)).join('\n');
+        h.engine.queueDeletions(PATH, [item().key]);
+        h.state.now += 5000;
+        vi.mocked(h.remote.remove).mockRejectedValueOnce(new Error('Offline')).mockRejectedValueOnce(new Error('Offline'));
+        await expect(h.engine.run(PATH, true)).rejects.toThrow('Offline');
+        h.state.text = text;
+        h.engine.restoreDeletions(PATH, [item().key]);
+        await expect(h.engine.run(PATH, false)).rejects.toThrow('Offline');
+        expect(h.remote.create).not.toHaveBeenCalled();
+        expect(h.state.text).toContain(`Buy coffee <!-- gdn:${item().key}`);
+        const restored = structuredClone(h.data);
+        const restarted = new SyncEngine(restored, h.remote, {
+            read: async () => h.state.text, indent: () => h.state.indent,
+            write: async (_path, _before, after) => { h.state.text = after; return true; },
+        }, async () => undefined, () => h.state.now);
+        await restarted.run(PATH, true);
+        expect(h.remote.remove).toHaveBeenCalledTimes(3);
+        expect(h.remote.create).toHaveBeenCalledOnce();
+        expect(h.items).toHaveLength(1);
+        expect(h.items[0]!.id).toBe('created');
+        expect(restored.outbox).toEqual({});
+    });
+    it('handles undo while the delete request is in flight', async () => {
+        const h = harness();
+        const text = h.state.text;
+        h.state.text = text.split('\n').filter(line => !line.includes(item().key)).join('\n');
+        h.engine.queueDeletions(PATH, [item().key]);
+        h.state.now += 5000;
+        vi.mocked(h.remote.remove).mockImplementationOnce(async () => {
+            h.state.text = text;
+            h.engine.restoreDeletions(PATH, [item().key]);
+            h.items.splice(0);
+        });
+        await h.engine.run(PATH, true);
+        await h.engine.run(PATH, true);
+        expect(h.remote.create).toHaveBeenCalledOnce();
+        expect(h.items).toHaveLength(1);
+        expect(h.data.notes[PATH]!.rows[item().key]!.id).toBe('created');
+    });
+    it('recovers undo intent and the original list/date after a failed outbox save', async () => {
+        const original = item({ source: 'original-list', date: '2026-09-16' });
+        const h = harness([original]);
+        const text = h.state.text;
+        h.state.text = text.split('\n').filter(line => !line.includes(original.key)).join('\n');
+        h.engine.queueDeletions(PATH, [original.key]);
+        h.state.now += 5000;
+        await h.engine.run(PATH, true);
+        h.state.text = text;
+        h.engine.restoreDeletions(PATH, [original.key]);
+        let saved = structuredClone(h.data);
+        h.save.mockImplementation(async () => {
+            if (Object.values(h.data.outbox).some(operation => operation.create)) throw new Error('Disk error');
+            saved = structuredClone(h.data);
+        });
+        await expect(h.engine.run(PATH, true)).rejects.toThrow('Disk error');
+        expect(h.remote.create).not.toHaveBeenCalled();
+        expect(h.state.text).toContain(original.key);
+        const restarted = new SyncEngine(saved, h.remote, {
+            read: async () => h.state.text, indent: () => h.state.indent,
+            write: async (_path, _before, after) => { h.state.text = after; return true; },
+        }, async () => undefined, () => h.state.now);
+        await restarted.run(PATH, true);
+        expect(h.remote.create).toHaveBeenCalledOnce();
+        expect(h.items[0]).toMatchObject({ source: 'original-list', date: '2026-09-16' });
+    });
+    it('keeps the replacement ID across an uncertain creation instead of inserting again', async () => {
+        const h = harness();
+        const text = h.state.text;
+        h.state.text = text.split('\n').filter(line => !line.includes(item().key)).join('\n');
+        h.engine.queueDeletions(PATH, [item().key]);
+        h.state.now += 5000;
+        await h.engine.run(PATH, true);
+        h.state.text = text;
+        h.engine.restoreDeletions(PATH, [item().key]);
+        vi.mocked(h.remote.create).mockImplementationOnce(async (_operation, beforeInsert) => {
+            await beforeInsert();
+            throw new Error('Response lost');
+        });
+        await expect(h.engine.run(PATH, false)).rejects.toThrow('Response lost');
+        const pending = Object.values(h.data.outbox)[0]!;
+        expect(pending.create?.phase).toBe('sent');
+        vi.mocked(h.remote.create).mockResolvedValueOnce(undefined);
+        await h.engine.run(PATH, true);
+        expect(Object.keys(h.data.outbox)).toEqual([pending.key]);
+        expect(h.data.outbox[pending.key]!.create?.phase).toBe('sent');
+        expect(h.state.text).toContain(item().key);
+    });
+    it('deletes and restores the new identity on repeated redo and undo', async () => {
+        const h = harness();
+        const original = h.state.text;
+        h.state.text = original.split('\n').filter(line => !line.includes(item().key)).join('\n');
+        h.engine.queueDeletions(PATH, [item().key]);
+        h.state.now += 5000;
+        await h.engine.run(PATH, true);
+        h.state.text = original;
+        h.engine.restoreDeletions(PATH, [item().key]);
+        await h.engine.run(PATH, true);
+        const recreated = h.state.text;
+        const newKey = item().key;
+        h.state.text = recreated.split('\n').filter(line => !line.includes(newKey)).join('\n');
+        h.engine.queueDeletions(PATH, [newKey]);
+        h.state.now += 5000;
+        await h.engine.run(PATH, true);
+        h.state.text = original; // Native history may still carry an older ID.
+        h.engine.restoreDeletions(PATH, [item().key]);
+        await h.engine.run(PATH, true);
+        expect(h.remote.create).toHaveBeenCalledTimes(2);
+        expect(h.remote.remove).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'created' }));
+        expect(h.state.text).toContain(item().key);
+        expect(h.data.notes[PATH]!.rows[item().key]!.id).toBe('created-2');
+        expect(h.items).toHaveLength(1);
+    });
+    it('cancels a late undo redone before the replacement is staged', async () => {
+        const h = harness();
+        h.state.text = h.state.text.split('\n').filter(line => !line.includes(item().key)).join('\n');
+        h.engine.queueDeletions(PATH, [item().key]);
+        h.state.now += 5000;
+        await h.engine.run(PATH, true);
+        h.engine.restoreDeletions(PATH, [item().key]);
+        h.engine.queueDeletions(PATH, [item().key]);
+        await h.engine.run(PATH, true);
+        expect(h.remote.create).not.toHaveBeenCalled();
+        expect(h.data.outbox).toEqual({});
+    });
+    it('can redo deletion of an unsent task after undo without blocking on itself', async () => {
+        const h = harness([]);
+        h.state.text = EMPTY.replace('<!-- gdn:tasks -->\n', '<!-- gdn:tasks -->\n    - [ ] Offline draft\n');
+        vi.mocked(h.remote.create).mockRejectedValueOnce(new Error('Offline')).mockRejectedValueOnce(new Error('Offline'));
+        await expect(h.engine.run(PATH, true)).rejects.toThrow('Offline');
+        const key = Object.keys(h.data.outbox)[0]!;
+        const text = h.state.text;
+        h.state.text = text.split('\n').filter(line => !line.includes(key)).join('\n');
+        h.engine.queueDeletions(PATH, [key]);
+        h.state.text = text;
+        h.engine.restoreDeletions(PATH, [key]);
+        await expect(h.engine.run(PATH, true)).rejects.toThrow('Offline');
+        h.state.text = text.split('\n').filter(line => !line.includes(key)).join('\n');
+        h.engine.queueDeletions(PATH, [key]);
+        h.state.now += 5000;
+        await h.engine.run(PATH, true);
+        expect(h.data.outbox).toEqual({});
+        expect(h.remote.remove).not.toHaveBeenCalled();
+        expect(h.remote.create).toHaveBeenCalledTimes(2);
     });
     it('does not send a cancelled deletion captured before another request finished', async () => {
         const h = harness([item(), event()]);
@@ -310,7 +494,7 @@ describe('synchronization', () => {
         h.engine.queueDeletions(PATH, [event().key]);
         vi.mocked(h.remote.patch).mockImplementationOnce(async () => {
             h.state.now += 4999;
-            h.engine.cancelDeletions(PATH, [event().key]);
+            h.engine.restoreDeletions(PATH, [event().key]);
             h.state.now += 100;
         });
         await h.engine.flush();

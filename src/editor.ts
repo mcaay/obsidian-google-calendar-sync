@@ -88,7 +88,8 @@ function decorations(state: EditorState): DecorationSet {
  * 3. handleKey() handles managed-row toggles and task insertion; changed() tells
  *    SyncScheduler (scheduler.ts) when to push. Vim's mode event flushes titles.
  * 4. deletedRowKeys() journals full-row deletions with a five-second deadline.
- *    restoredRowKeys() lets native undo restore pending rows and cancel deletion.
+ *    restoredRowKeys() lets native undo cancel pending deletion or recreate a
+ *    deleted Google Task. Calendar events are never recreated from the note.
  *    Calendar rows keep their occurrence IDs when the delayed deletion is sent.
  * Ordinary: Cmd+Enter changes a real Markdown checkbox and queues a status push.
  * Tricky: o on a calendar row does nothing; o on a task makes an unlinked draft.
@@ -245,7 +246,7 @@ export function editorExtension(hooks: EditorHooks): Extension {
                 } catch { return; }
                 const vim = this.cm?.state.vim;
                 hooks.changed(path, Boolean(vim), toggled || deleted.length > 0 || restored);
-                if (vim && !vim.insertMode && !vim.visualMode) queueMicrotask(() => hooks.normal(path));
+                if (restored || (vim && !vim.insertMode && !vim.visualMode)) queueMicrotask(() => hooks.normal(path));
             }
 
             destroy(): void {

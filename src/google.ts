@@ -159,6 +159,8 @@ export class GoogleClient implements Remote {
     }
 
     async remove(operation: Operation): Promise<void> {
+        // Tasks exposes deletion by ID only. It has no recurring-series ID or
+        // delete-all option; never infer a series from matching task titles.
         const url = operation.kind === 'event'
             ? `${CALENDAR}/calendars/${enc(operation.source)}/events/${enc(operation.id)}`
             : `${TASKS}/lists/${enc(operation.source)}/tasks/${enc(operation.id)}`;

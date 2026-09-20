@@ -2,7 +2,7 @@
 
 Google Calendar and Google Tasks in your Obsidian daily notes, as real Markdown rows you can navigate and edit with Vim.
 
-**v0.8** is an early public release. [Source code](https://github.com/mcaay/obsidian-google-calendar-sync) and [downloads](https://github.com/mcaay/obsidian-google-calendar-sync/releases/tag/0.8.0) are available on GitHub under the MIT license. Submission to Obsidian's community plugin directory is planned after testing. The pages in `docs/` are drafts for a future GitHub Pages site.
+**v0.8.1** is an early public release. [Source code](https://github.com/mcaay/obsidian-google-calendar-sync) and [downloads](https://github.com/mcaay/obsidian-google-calendar-sync/releases/tag/0.8.1) are available on GitHub under the MIT license. Submission to Obsidian's community plugin directory is planned after testing. The pages in `docs/` are drafts for a future GitHub Pages site.
 
 This desktop plugin syncs on opening or creating an enabled note and every 120 seconds. Checking a row syncs immediately. Title edits sync when Vim returns to normal mode, or after 10 seconds of inactivity without Vim. An edit-triggered sync restarts the periodic timer.
 
@@ -14,7 +14,7 @@ Support Obsidian on iOS and Android, including mobile-compatible Google sign-in 
 
 Requires Obsidian desktop 1.11.4 or newer.
 
-1. Download `google-daily-notes.zip` from the [v0.8 release](https://github.com/mcaay/obsidian-google-calendar-sync/releases/tag/0.8.0) and unzip it.
+1. Download `google-daily-notes.zip` from the [v0.8.1 release](https://github.com/mcaay/obsidian-google-calendar-sync/releases/tag/0.8.1) and unzip it.
 2. Copy its `google-daily-notes` folder into `<Your vault>/.obsidian/plugins/`.
 3. In Obsidian, open **Settings → Community plugins**, enable community plugins if needed, and enable **Google Calendar Sync by mcaay**.
 4. Configure Google access below, then select the calendars and task lists to display.
@@ -99,7 +99,13 @@ Each synced row also contains an HTML comment identifying the Google item. The e
 | Enter on a Google Task outside Vim normal mode | Insert a new task below. |
 | Vim `o` / `O`, or Enter, on a calendar event | No action. Calendar rows cannot create new events. |
 
-Vim `dd` and other whole-row deletions remove the row immediately and wait **5 seconds** before deleting it from Google. Use native Vim `u` or Cmd+Z during those five seconds to restore the row and cancel deletion. Redo starts a fresh five-second window. No confirmation appears. For recurring calendar events, only the displayed occurrence is deleted. Google Tasks are deleted directly, including recurring tasks; the public Tasks API does not expose recurrence information, so automatic recurrence icons and occurrence-specific task deletion are unavailable. After the five-second window, undo cannot restore the deleted item. Failed deletions retry automatically; the pending deletion and its deadline survive plugin reloads and restarts.
+Vim `dd` and other whole-row deletions remove the row immediately and wait **5 seconds** before deleting it from Google. Native Vim `u` or Cmd+Z during those five seconds restores the row and cancels deletion. Redo starts a fresh five-second window. No confirmation appears.
+
+After five seconds, undo of a **Google Task** creates a new task with the restored title and completion status, original due date, and original task list. The restored row is linked to its new Google ID. If deletion is still pending, creation waits for it to succeed; offline retries and plugin reloads preserve this sequence. Restoring stale Markdown outside native undo never creates a replacement.
+
+For recurring **Calendar events**, deletion affects only the displayed occurrence. Calendar events cannot be recreated from Obsidian after deletion has been sent.
+
+For **Google Tasks**, the plugin deletes the task by ID. Google's public API exposes neither recurrence information nor a delete-all-occurrences option, so the plugin cannot guarantee removal of an entire repeating series. Use Google's own **Delete all** action for that. A task recreated by late undo is a one-off task; the API cannot restore its repeat schedule or native reminder time. See the [Tasks API](https://developers.google.com/workspace/tasks/reference/rest/v1/tasks) and [Google's recurring-task instructions](https://support.google.com/tasks/answer/12132599).
 
 Event time, duration, row identity, and section structure remain protected. Removing a row through an external editor does not delete it from Google and it returns at the next sync. Manage event scheduling and recurrence in Google.
 
@@ -125,7 +131,7 @@ Recurrence is managed in Google. The plugin shows the dated task instances Googl
 - An edited title or status in Obsidian wins for that field. Fields you did not edit keep Google's current value.
 - A conditional update re-reads once if the remote resource changed during the request. Remaining failures retain the edit for a later automatic retry.
 - Multiple local edits to the same item are serialized. The latest staged edit to a field wins.
-- A remote deletion wins; editing an old row never recreates the deleted item.
+- A remote deletion wins over stale note content. Explicit native undo of a task deleted through the plugin creates a new linked task.
 - Read-only calendars are displayed but cannot be edited.
 - A note is updated only if its text still matches what the sync read. Typing during a network request postpones the refresh instead of overwriting your work.
 - Failed edits remain in the plugin's durable outbox. The next sync retries them, including after a restart. Do not delete the plugin's `data.json` while it contains pending work.

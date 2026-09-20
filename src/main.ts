@@ -43,13 +43,13 @@ export default class GoogleDailyNotes extends Plugin {
         this.google = new GoogleClient(transport, force => this.auth.token(force));
         this.controller = new Controller(this, this.data, this.google, () => this.persist(), () => this.auth.connected());
         this.registerEditorExtension(editorExtension({
-            rows: path => this.data.notes[path]?.rows ?? {},
+            rows: path => this.controller.engine.editorRows(path),
             indent: () => this.controller.indent(),
             changed: (path, vim, toggled) => this.controller.scheduler.changed(path, vim, toggled),
             normal: path => this.controller.scheduler.normal(path),
             deleted: (path, keys) => this.controller.queueDeletions(path, keys),
             undoableDeletions: (path, at) => this.controller.engine.undoableDeletions(path, at),
-            restored: (path, keys, at) => this.controller.cancelDeletions(path, keys, at),
+            restored: (path, keys, at) => this.controller.restoreDeletions(path, keys, at),
         }));
         this.addSettingTab(new GoogleSettingsTab(this.app, this));
         this.addCommand({

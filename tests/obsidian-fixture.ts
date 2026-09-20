@@ -27,7 +27,7 @@ export default class FixturePlugin extends GoogleDailyNotes {
         this.google.removeCreationMarker = async () => undefined;
         this.google.patch = async operation => {
             fixture.operations.push(structuredClone(operation));
-            const target = fixture.items.find(value => value.key === operation.key);
+            const target = fixture.items.find(value => value.kind === operation.kind && value.source === operation.source && value.id === operation.id);
             if (target) {
                 if (operation.title !== undefined) target.title = operation.title;
                 if (operation.done !== undefined) target.done = operation.done;

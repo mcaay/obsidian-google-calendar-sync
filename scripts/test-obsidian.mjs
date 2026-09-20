@@ -317,12 +317,32 @@ try {
     assert.match(await editorText(), /Monthly report/, 'Other calendar occurrences remain');
     const createsBeforeLateUndo = await page.evaluate(() => window.gdnTest.operations.filter(operation => operation.create).length);
     await page.keyboard.press('u');
-    // Native history bypasses CM transaction filters. A late undo may briefly
-    // restore local text; reconciliation must remove it without recreating Google data.
-    await page.waitForFunction(() => !/Planning meeting|Weekly review updated|Buy coffee|New task from Vim/.test(window.app.workspace.activeEditor.editor.getValue()), undefined, { timeout: 3000 });
-    assert.equal(await page.evaluate(() => window.gdnTest.operations.filter(operation => operation.create).length), createsBeforeLateUndo);
-
-    console.log('PASS: dd commits after five seconds, preserves its deadline across reload, and deletes only selected items.');
+    await page.waitForFunction(count => window.gdnTest.operations.filter(operation => operation.create).length === count + 1
+        && !Object.keys(window.app.plugins.plugins['google-daily-notes'].data.outbox).length, createsBeforeLateUndo, { timeout: 5000 });
+    const replacement = await page.evaluate(() => structuredClone(window.gdnTest.items.find(item => item.title === 'New task from Vim without Vim')));
+    assert.ok(replacement);
+    const restoredRowKey = await page.evaluate(id => Object.values(window.app.plugins.plugins['google-daily-notes'].data.notes['2026-09-19.md'].rows).find(row => row.id === id).key, replacement.id);
+    assert.ok((await editorText()).includes(restoredRowKey), 'Late undo binds the replacement Google ID to the stable Markdown row');
+    assert.doesNotMatch(await editorText(), /Planning meeting|Weekly review updated|Buy coffee/, 'Undo never recreates calendar events');
+    await selectRow(replacement.title);
+    await page.keyboard.press('Meta+Enter');
+    await page.waitForFunction(id => window.gdnTest.operations.some(operation => operation.id === id && operation.done === true), replacement.id);
+    // Delete the recreated task, then undo again after the deadline. Both rounds
+    // must use their current Google IDs, including through native history mapping.
+    await page.keyboard.press('d');
+    await page.keyboard.press('d');
+    await page.waitForFunction(id => window.gdnTest.operations.some(operation => operation.remove && operation.id === id), replacement.id, { timeout: 8000 });
+    await page.keyboard.press('u');
+    await page.waitForFunction(count => window.gdnTest.operations.filter(operation => operation.create).length === count + 2
+        && !Object.keys(window.app.plugins.plugins['google-daily-notes'].data.outbox).length, createsBeforeLateUndo, { timeout: 5000 });
+    const secondReplacement = await page.evaluate(() => structuredClone(window.gdnTest.items.find(item => item.title === 'New task from Vim without Vim')));
+    assert.notEqual(secondReplacement.id, replacement.id);
+    assert.ok((await editorText()).includes(restoredRowKey));
+    await page.keyboard.press('Control+r');
+    assert.ok(!(await editorText()).includes(restoredRowKey), 'Native redo deletes the current replacement');
+    await page.keyboard.press('u');
+    assert.ok((await editorText()).includes(restoredRowKey), 'Undo during redo grace retains the same replacement');
+    console.log('PASS: late Vim undo recreates and relinks Google Tasks; subsequent toggles, deletion and redo use the new ID.');
 
     await setVim(false);
     const selectTimedRow = () => page.evaluate(() => {
@@ -337,11 +357,16 @@ try {
     await page.keyboard.press('Meta+z');
     assert.match(await editorText(), /Call Sam/, 'Cmd+Z restores a deleted task outside Vim');
     await new Promise(resolve => setTimeout(resolve, 5100));
-    assert.equal(await removalCount(), 4, 'Cmd+Z cancels remote deletion');
+    assert.equal(await removalCount(), 5, 'Cmd+Z cancels remote deletion');
     await selectTimedRow();
     await page.keyboard.press('Backspace');
     await page.waitForFunction(() => window.gdnTest.operations.some(operation => operation.remove && operation.id === 'timed'), undefined, { timeout: 8000 });
-    console.log('PASS: whole-row deletion and Cmd+Z use the same grace period outside Vim.');
+    await page.keyboard.press('Meta+z');
+    await page.waitForFunction(() => window.gdnTest.items.some(item => item.title.includes('Call Sam') && item.id !== 'timed')
+        && !Object.keys(window.app.plugins.plugins['google-daily-notes'].data.outbox).length, undefined, { timeout: 5000 });
+    const restoredTimedKey = await page.evaluate(() => Object.values(window.app.plugins.plugins['google-daily-notes'].data.notes['2026-09-19.md'].rows).find(item => item.title.includes('Call Sam')).key);
+    assert.ok((await editorText()).includes(restoredTimedKey), 'Late Cmd+Z restores and relinks the task without Vim');
+    console.log('PASS: Cmd+Z cancels deletion within five seconds and recreates the task after five seconds.');
 
     await page.evaluate(() => { window.app.setting.open(); window.app.setting.openTabById('google-daily-notes'); });
     let settingsPage;

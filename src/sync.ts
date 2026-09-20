@@ -18,7 +18,9 @@ export interface NoteAccess {
  *    Saved IDs with no markerRemoved flag also clean up tasks from older versions.
  *    queueDeletions() journals explicit editor deletions; missing rows on disk
  *    alone never become remote deletions. Deletions wait five seconds; native
- *    undo calls cancelDeletions() before that deadline. flush() skips them until due.
+ *    undo calls restoreDeletions() before that deadline. Later task undo creates a
+ *    replacement with a stable Markdown ID so native redo preserves the row.
+ *    The new task waits for confirmation that the old task was deleted.
  * 3. Remote.load() builds dated items (items.ts); renderNote() (markdown.ts)
  *    updates only managed regions. NoteAccess.write() checks for concurrent edits.
  * Ordinary: a checkbox becomes one status operation, then a refreshed Markdown row.
@@ -42,11 +44,30 @@ export class SyncEngine {
         if (this.stopped) return '';
         if (!render) return 'Editing';
         const state = this.data.notes[path]!;
-        const loaded = await this.remote.load(date, this.data.settings, state.retained);
+        const retained = state.retained.map(key => {
+            const record = this.data.deletedTasks[key];
+            const target = record?.restoredKey ? this.data.created[record.restoredKey] : record?.item;
+            return target ? itemKey('task', target.source, target.id) : key;
+        });
+        const loaded = await this.remote.load(date, this.data.settings, retained);
         if (this.stopped) return '';
         // Google still has the item during the undo window. Keep it hidden in
         // the note while retaining its snapshot so native undo can restore it.
-        const items = loaded.filter(item => !this.pendingDeletion(item));
+        const linked = loaded.map(item => {
+            // Keep the Markdown identity stable for native undo/redo. Only the
+            // remote ID changes; the same binding applies in other daily notes.
+            const binding = Object.entries(this.data.deletedTasks).find(([, record]) => {
+                const target = record.restoredKey ? this.data.created[record.restoredKey] : record.item;
+                return item.kind === 'task' && target?.source === item.source && target.id === item.id;
+            });
+            return binding ? { ...item, key: binding[0] } : item;
+        });
+        const items = linked.filter(item => !this.pendingDeletion(item));
+        for (const [key, record] of Object.entries(this.data.deletedTasks)) {
+            if (record.path !== path || record.deleted || !record.restoredKey || this.data.created[record.restoredKey]) continue;
+            const snapshot = state.rows[key];
+            if (snapshot && text.includes(`<!-- gdn:${key} -->`)) items.push(snapshot);
+        }
         // A status-only flush must not overwrite a title still being edited.
         if (!titles && this.hasLocalEdits(path, text)) return 'Editing';
         for (const item of items) {
@@ -57,6 +78,7 @@ export class SyncEngine {
         // Successful inserts replace their local ID with the durable Google ID.
         let transformed = text;
         for (const [key, result] of Object.entries(this.data.created)) {
+            if (this.data.deletedTasks[key]) continue;
             transformed = transformed.replace(`<!-- gdn:${key} -->`, `<!-- gdn:${itemKey('task', result.source, result.id)} -->`);
         }
         const after = renderNote(transformed, items, this.notes.indent());
@@ -103,55 +125,112 @@ export class SyncEngine {
 
     queueDeletions(path: string, keys: string[]): void {
         for (const key of keys) {
+            const previous = this.data.deletedTasks[key];
+            const replacement = previous?.restoredKey;
+            const pendingKey = replacement && !this.data.created[replacement] ? replacement : key;
+            const pending = this.data.outbox[pendingKey];
+            // Redo before staging cancels the replacement intent. No new task
+            // exists yet, and the original deletion remains authoritative.
+            if (replacement && pendingKey === replacement && !pending) {
+                previous.deleted = true;
+                delete previous.restoredKey;
+                continue;
+            }
             const snapshot = this.data.notes[path]?.rows[key];
-            const pending = this.data.outbox[key];
             if (!snapshot?.writable && !pending?.create) continue;
-            this.data.outbox[key] = {
-                ...(pending ?? { key, kind: snapshot!.kind, source: snapshot!.source, id: snapshot!.id, path }),
+            const item = pending?.create ? { ...this.createdSnapshot(pending), key } : snapshot!;
+            if (item.kind === 'task') this.data.deletedTasks[key] = { path, item: { ...item }, deletionKey: pendingKey, deleted: true };
+            this.data.outbox[pendingKey] = {
+                ...(pending ?? { key, kind: item.kind, source: item.source, id: item.id, path }),
                 remove: true, removeAfter: this.now() + 5000,
             };
         }
     }
 
     undoableDeletions(path: string, at = this.now()): string[] {
-        return Object.values(this.data.outbox).filter(operation => operation.path === path && operation.remove
-            && (operation.removeAfter ?? 0) > at).map(operation => operation.key);
+        return [...new Set([
+            ...Object.values(this.data.outbox).filter(operation => operation.path === path && operation.remove
+                && (operation.removeAfter ?? 0) > at).map(operation => operation.key),
+            ...Object.entries(this.data.deletedTasks).filter(([, record]) => record.path === path).map(([key]) => key),
+        ])];
     }
 
-    cancelDeletions(path: string, keys: string[], at = this.now()): void {
-        for (const key of this.undoableDeletions(path, at)) {
-            if (!keys.includes(key)) continue;
-            const operation = { ...this.data.outbox[key]! };
-            delete operation.remove;
-            delete operation.removeAfter;
-            // Undoing deletion must retain edits or draft creation already queued
-            // before dd, especially when the connection is offline.
-            if (operation.create || operation.title !== undefined || operation.done !== undefined) this.data.outbox[key] = operation;
-            else delete this.data.outbox[key];
+    restoreDeletions(path: string, keys: string[], at = this.now()): void {
+        for (const key of keys) {
+            const record = this.data.deletedTasks[key];
+            if (record && (record.path !== path || !record.deleted)) continue;
+            const pendingKey = record?.deletionKey ?? key;
+            const pending = this.data.outbox[pendingKey];
+            if (pending?.path === path && pending.remove && (pending.removeAfter ?? 0) > at) {
+                const operation = { ...pending };
+                delete operation.remove;
+                delete operation.removeAfter;
+                // Undo retains title/status edits or creation already queued before dd.
+                if (operation.create || operation.title !== undefined || operation.done !== undefined) this.data.outbox[pendingKey] = operation;
+                else delete this.data.outbox[pendingKey];
+                if (record) {
+                    record.deleted = false;
+                    if (operation.create) record.restoredKey = pendingKey;
+                }
+            } else if (record) {
+                record.deleted = false;
+                record.restoredKey = `new:${randomUUID()}`;
+            }
         }
+    }
+
+    editorRows(path: string): Record<string, Item> {
+        return {
+            ...Object.fromEntries(Object.entries(this.data.deletedTasks).filter(([, record]) => record.path === path).map(([key, record]) => [key, record.item])),
+            ...this.data.notes[path]?.rows,
+        };
     }
 
     private async stage(path: string, text: string, date: string, titles: boolean): Promise<string> {
         const state = this.data.notes[path] ??= { rows: {}, retained: [] };
         let prepared = text;
         const edits: { from: number; to: number; text: string }[] = [];
+        // Journal explicit undo before any insert. Its stable row identity lets
+        // a restart recover the original list/date without guessing from titles.
+        if (Object.values(this.data.deletedTasks).some(record => record.path === path && record.restoredKey && !this.data.created[record.restoredKey])) await this.save();
         for (const region of regions(text, this.notes.indent())) for (const line of region.lines) {
             let key = rowKey(line.text);
             let snapshot = key ? state.rows[key] : undefined;
-            if (region.section === 'tasks' && titles && (!key || key.startsWith('new:'))) {
+            const restoration = key ? this.data.deletedTasks[key] : undefined;
+            if (key && restoration?.restoredKey && !restoration.deleted) {
+                const created = this.data.created[restoration.restoredKey];
+                if (!created) {
+                    const draft = visibleRow(line.text);
+                    if (!draft?.title.trim()) continue;
+                    const existing = this.data.outbox[restoration.restoredKey];
+                    const operation: Operation = {
+                        ...existing, key: restoration.restoredKey, kind: 'task', id: '', source: restoration.item.source,
+                        path, title: draft.title.trim(), done: draft.done ?? false,
+                        create: existing?.create ?? { date: restoration.item.date, phase: 'prepared' },
+                        replaces: existing?.replaces ?? (restoration.deletionKey !== restoration.restoredKey ? restoration.deletionKey : undefined),
+                    };
+                    this.data.outbox[operation.key] = operation;
+                    state.rows[key] = { ...this.createdSnapshot(operation), key };
+                    continue;
+                }
+                snapshot = { ...(snapshot ?? restoration.item), ...created, key };
+                state.rows[key] = snapshot;
+            }
+            if (region.section === 'tasks' && titles && !restoration && (!key || key.startsWith('new:'))) {
                 const draft = key ? visibleRow(line.text) : draftTitle(line.text);
                 const created = key ? this.data.created[key] : undefined;
                 if (created) {
-                    // A restored old draft must never recreate a known Google
-                    // task, including one the user has already deleted.
+                    // Only an explicit undo with a fresh replacement ID may
+                    // recreate a deleted task; stale notes cannot do so.
                     if (!snapshot) continue;
                     snapshot = { ...snapshot, ...created, key: itemKey('task', created.source, created.id) };
                 } else if (draft?.title.trim()) {
-                    if (!this.data.settings.defaultTaskList) throw new Error('Choose a default Google Tasks list in plugin settings.');
                     key ??= `new:${randomUUID()}`;
                     const existing = this.data.outbox[key];
+                    const source = existing?.source ?? this.data.settings.defaultTaskList;
+                    if (!source) throw new Error('Choose a default Google Tasks list in plugin settings.');
                     const operation: Operation = {
-                        key, kind: 'task', id: '', source: existing?.source ?? this.data.settings.defaultTaskList,
+                        ...existing, key, kind: 'task', id: '', source,
                         path, title: draft.title.trim(), done: draft.done ?? false,
                         create: existing?.create ?? { date, phase: 'prepared' },
                     };
@@ -211,6 +290,7 @@ export class SyncEngine {
             if (this.stopped) return;
             if (this.data.outbox[key] !== operation) continue;
             if (operation.remove && (operation.removeAfter ?? 0) > this.now()) continue;
+            if (operation.replaces && this.data.outbox[operation.replaces]?.remove) continue;
             try {
                 if (operation.create) {
                     if (operation.remove && operation.create.phase === 'prepared' && !this.data.created[key]) {
@@ -229,7 +309,13 @@ export class SyncEngine {
                     });
                     if (!created) continue;
                     this.data.created[key] = created;
-                    const snapshot = this.data.notes[operation.path]?.rows[key];
+                    if (operation.done) {
+                        const retained = this.data.notes[operation.path]?.retained;
+                        const createdKey = Object.entries(this.data.deletedTasks).find(([, record]) => record.restoredKey === key)?.[0] ?? itemKey('task', created.source, created.id);
+                        if (retained && !retained.includes(createdKey)) retained.push(createdKey);
+                    }
+                    const rowKey = Object.entries(this.data.deletedTasks).find(([, record]) => record.restoredKey === key)?.[0] ?? key;
+                    const snapshot = this.data.notes[operation.path]?.rows[rowKey];
                     if (snapshot) { snapshot.source = created.source; snapshot.id = created.id; }
                     if (operation.remove) {
                         await this.save();

@@ -127,6 +127,7 @@ export class Controller {
             if (this.data.notes[oldPath]) {
                 this.data.notes[file.path] = this.data.notes[oldPath]!; delete this.data.notes[oldPath];
                 for (const operation of Object.values(this.data.outbox)) if (operation.path === oldPath) operation.path = file.path;
+                for (const record of Object.values(this.data.deletedTasks)) if (record.path === oldPath) record.path = file.path;
             }
             this.tracked.delete(oldPath);
             if (file instanceof TFile) queue(file);
@@ -141,8 +142,8 @@ export class Controller {
         this.scheduleDeletions();
     }
 
-    cancelDeletions(path: string, keys: string[], at: number): void {
-        this.engine.cancelDeletions(path, keys, at);
+    restoreDeletions(path: string, keys: string[], at: number): void {
+        this.engine.restoreDeletions(path, keys, at);
         this.scheduleDeletions();
     }
 

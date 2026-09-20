@@ -62,6 +62,8 @@ export interface Operation extends Edit {
     marker?: boolean;
     remove?: boolean;
     removeAfter?: number;
+    // Recreating a deleted task must wait until its old ID is confirmed gone.
+    replaces?: string;
     create?: { date: string; phase: 'prepared' | 'sent' };
 }
 
@@ -72,10 +74,11 @@ export interface PluginData {
     outbox: Record<string, Operation>;
     // Maps durable local creation IDs to Google IDs after a successful insert.
     created: Record<string, { source: string; id: string; markerRemoved?: boolean }>;
+    deletedTasks: Record<string, { path: string; item: Item; deletionKey: string; deleted: boolean; restoredKey?: string }>;
 }
 
 export function initialData(): PluginData {
-    return { version: 1, settings: structuredClone(DEFAULT_SETTINGS), notes: {}, outbox: {}, created: {} };
+    return { version: 1, settings: structuredClone(DEFAULT_SETTINGS), notes: {}, outbox: {}, created: {}, deletedTasks: {} };
 }
 
 export interface CalendarEvent {

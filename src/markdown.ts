@@ -136,7 +136,7 @@ export function renderNote(text: string, items: Item[], indentUnit = '    '): st
         const managed = items.filter(item => item.section === region.section).sort((a, b) => a.sort.localeCompare(b.sort) || a.key.localeCompare(b.key));
         // Preserve all unlinked text, including drafts. A failed or ambiguous task
         // creation keeps its local marker until its remote identity is known.
-        const preserved = region.lines.filter(line => !rowKey(line.text) || rowKey(line.text)?.startsWith('new:'));
+        const preserved = region.lines.filter(line => !rowKey(line.text) || (rowKey(line.text)?.startsWith('new:') && !managed.some(item => item.key === rowKey(line.text))));
         const body = [...managed.map(item => renderRow(item, region.indent)), ...preserved.map(line => line.text)].join(newline);
         const separator = region.from > 0 && text[region.from - 1] !== '\n' && body ? newline : '';
         result = result.slice(0, region.from) + separator + (body ? body + newline : '') + result.slice(region.to);

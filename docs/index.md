@@ -15,7 +15,7 @@ Google Calendar Sync by mcaay is a desktop Obsidian plugin that brings Google Ca
 - Creates simple Google Tasks from task rows, using the daily note's date.
 - Syncs automatically, every 120 seconds by default and after edits.
 
-Calendar scheduling and recurrence stay in Google. Deleting a synced row in Obsidian deletes its Google task or individual calendar occurrence after a five-second undo window. The plugin cannot create calendar events or delete whole calendar series. Google's public Tasks API exposes due dates, but not native task times or recurrence details; a typed `📅 13:00` remains part of the title.
+Calendar scheduling and recurrence stay in Google. Deleting a synced row in Obsidian deletes its Google task or individual calendar occurrence after a five-second undo window. Late undo recreates a deleted Google Task as a new one-off task. The plugin cannot create calendar events or delete whole calendar series. It cannot guarantee deletion of every occurrence of a recurring Google Task because the public Tasks API provides no series-deletion control. Google's public Tasks API exposes due dates, but not native task times or recurrence details; a typed `📅 13:00` remains part of the title.
 
 ## How it connects
 
