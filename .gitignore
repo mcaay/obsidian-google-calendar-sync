@@ -8,3 +8,4 @@ data.json
 .DS_Store
 test-results/
 output/
+*.mp4

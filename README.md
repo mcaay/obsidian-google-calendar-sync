@@ -1,5 +1,9 @@
 # Google Calendar Sync by mcaay
 
+[![Watch the video walkthrough on YouTube](https://img.youtube.com/vi/RmP0dOEpyMs/maxresdefault.jpg)](https://www.youtube.com/watch?v=RmP0dOEpyMs)
+
+[Watch the video walkthrough on YouTube](https://www.youtube.com/watch?v=RmP0dOEpyMs)
+
 Google Calendar and Google Tasks in your Obsidian daily notes, as real Markdown rows you can navigate and edit with Vim.
 
 **v0.8.1** is an early public release. [Source code](https://github.com/mcaay/obsidian-google-calendar-sync) and [downloads](https://github.com/mcaay/obsidian-google-calendar-sync/releases/tag/0.8.1) are available on GitHub under the MIT license. Submission to Obsidian's community plugin directory is planned after testing. The pages in `docs/` are drafts for a future GitHub Pages site.
