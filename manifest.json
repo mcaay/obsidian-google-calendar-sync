@@ -1,7 +1,7 @@
 {
     "id": "google-daily-notes",
-    "name": "Google Calendar Sync by mcaay",
-    "version": "0.8.1",
+    "name": "Calendar Sync by mcaay",
+    "version": "0.8.2",
     "minAppVersion": "1.11.4",
     "description": "Sync Google Calendar and Tasks with real, keyboard-editable Markdown rows in daily notes.",
     "author": "mcaay",

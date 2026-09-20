@@ -1,4 +1,4 @@
-# Google Calendar Sync by mcaay
+# Calendar Sync by mcaay
 
 ## Instruction precedence and sources
 

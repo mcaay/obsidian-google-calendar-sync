@@ -26,7 +26,7 @@ google-daily: true
 - [ ] google tasks <!-- gdn:tasks -->
 ```
 
-You can also run **Google Calendar Sync by mcaay: Insert Google daily sections** from the command palette. Use the command in the note or template where you want the groups.
+You can also run **Calendar Sync by mcaay: Insert Google daily sections** from the command palette. Use the command in the note or template where you want the groups.
 
 The filename supplies the date: `2026-09-19.md`. For a different naming scheme, add an explicit ISO date property:
 

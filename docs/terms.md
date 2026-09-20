@@ -7,7 +7,7 @@ title: Terms of use
 
 Updated: 19 September 2026
 
-These terms describe use of **Google Calendar Sync by mcaay**, a desktop Obsidian plugin.
+These terms describe use of **Calendar Sync by mcaay**, a desktop Obsidian plugin.
 
 ## Authorized use
 

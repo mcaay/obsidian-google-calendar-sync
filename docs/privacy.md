@@ -7,7 +7,7 @@ title: Privacy policy
 
 Updated: 19 September 2026
 
-This policy describes **Google Calendar Sync by mcaay**, a desktop Obsidian plugin.
+This policy describes **Calendar Sync by mcaay**, a desktop Obsidian plugin.
 
 ## Google data accessed and used
 
@@ -37,7 +37,7 @@ Local notes and plugin state remain until you remove them. There is no automatic
 
 The plugin has no developer-operated synchronization server and does not transmit Google user data to its maintainer. It has no telemetry or advertising. It does not sell Google user data, use it for advertising, or send it to AI services or use it for model training.
 
-Google Calendar Sync by mcaay's use and transfer of information received from Google APIs adheres to the [Google API Services User Data Policy](https://developers.google.com/terms/api-services-user-data-policy), including the Limited Use requirements.
+Calendar Sync by mcaay's use and transfer of information received from Google APIs adheres to the [Google API Services User Data Policy](https://developers.google.com/terms/api-services-user-data-policy), including the Limited Use requirements.
 
 ## Disconnecting and deleting data
 
