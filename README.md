@@ -1,10 +1,18 @@
 # Google Calendar Sync by mcaay
 
+Idea:
+- events and tasks from Google appear as normal markdown in your daily notes
+- which means **you can use normal keyboard navigation, including vim mode, to manage those tasks** and you can even toggle the "done" status, which will sync it to google
+
+Why:
+- google handles recurring tasks very well, so it's good to schedule them there
+- google also handles meetings and events very well, it's easy to invite someone to a meeting if you just have his email address
+- it's nice to see everything in obsidian rather than checking 2 separate places every day
+
+Video walkthrough - **first 6 minutes is a TLDR section**, then I'm rambling for 15 more minutes.
+
 [![Watch the walkthrough on YouTube](https://img.youtube.com/vi/RmP0dOEpyMs/maxresdefault.jpg)](https://www.youtube.com/watch?v=RmP0dOEpyMs)
 
-Google Calendar and Google Tasks in your Obsidian daily notes. Real Markdown rows: edit titles, tick checkboxes and add tasks with your keyboard, including Vim.
-
-Shows the note's events and dated tasks, plus unfinished tasks from earlier days. Unscheduled Google Tasks stay out. Syncs automatically.
 
 ## Install
 
