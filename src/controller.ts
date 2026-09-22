@@ -61,6 +61,11 @@ export class Controller {
         const view = this.view(path);
         if (view) {
             await view.save();
+            // Obsidian reuses the view when switching notes. A save can finish
+            // after that switch; reading its new text under the old path would
+            // turn another day's checkboxes into local edits and retain them.
+            // Abandon this read so the next sync uses the correct note.
+            if (this.disposed || view.file?.path !== path || view.getMode() !== 'source') return undefined;
             return view.editor.getValue();
         }
         const file = this.app.vault.getAbstractFileByPath(path);

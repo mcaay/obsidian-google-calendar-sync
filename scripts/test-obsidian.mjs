@@ -368,6 +368,79 @@ try {
     assert.ok((await editorText()).includes(restoredTimedKey), 'Late Cmd+Z restores and relinks the task without Vim');
     console.log('PASS: Cmd+Z cancels deletion within five seconds and recreates the task after five seconds.');
 
+    // Reproduce a reused MarkdownView changing files while read() awaits save().
+    // The earlier note is checked and the later note still has its old unchecked
+    // row. Merely switching must not send another completion or retain it there.
+    const switchTask = {
+        key: Buffer.from(JSON.stringify(['task', 'list', 'switch-test'])).toString('base64url'),
+        kind: 'task', source: 'list', id: 'switch-test', section: 'tasks',
+        title: 'Completed in the earlier note', done: false, prefix: '',
+        date: '2026-09-22', writable: true, sort: '2026-09-22',
+    };
+    const switchResult = await page.evaluate(async task => {
+        const plugin = window.app.plugins.plugins['google-daily-notes'];
+        const controller = plugin.controller;
+        const originalLoad = plugin.google.load;
+        const originalItems = window.gdnTest.items;
+        controller.scheduler.dispose();
+        window.gdnTest.items = [task];
+        plugin.google.load = async (date, _settings, retained) => structuredClone(
+            window.gdnTest.items.filter(item => item.date === date || (item.date < date && (!item.done || retained.includes(item.key)))));
+        const template = '---\ngoogle-daily: true\n---\n- [ ] google tasks <!-- gdn:tasks -->\n';
+        const earlier = await window.app.vault.create('2026-09-23.md', template);
+        const later = await window.app.vault.create('2026-09-25.md', template);
+        for (const file of [earlier, later]) {
+            await window.app.workspace.getLeaf(false).openFile(file);
+            await controller.engine.run(file.path, true);
+        }
+        await window.app.workspace.getLeaf(false).openFile(earlier);
+        const editor = window.app.workspace.activeEditor.editor;
+        const row = editor.getValue().split('\n').findIndex(line => line.includes(task.title));
+        const column = editor.getLine(row).indexOf('[ ]') + 1;
+        editor.replaceRange('x', { line: row, ch: column }, { line: row, ch: column + 1 });
+        await controller.engine.run(earlier.path, true);
+        await window.app.workspace.getLeaf(false).openFile(later);
+        const view = window.app.workspace.activeEditor;
+        const save = view.save.bind(view);
+        let resume;
+        const delayed = new Promise(resolve => { resume = resolve; });
+        let signal;
+        const started = new Promise(resolve => { signal = resolve; });
+        view.save = async () => {
+            view.save = save;
+            await save();
+            signal();
+            await delayed;
+        };
+        const operationsBeforeSwitch = window.gdnTest.operations.length;
+        const sync = controller.engine.run(later.path, true);
+        await started;
+        await window.app.workspace.getLeaf(false).openFile(earlier);
+        resume();
+        await sync;
+        await controller.engine.run(later.path, true);
+        const result = {
+            earlier: await window.app.vault.read(earlier),
+            later: await window.app.vault.read(later),
+            earlierRetained: [...plugin.data.notes[earlier.path].retained],
+            laterRetained: [...plugin.data.notes[later.path].retained],
+            extraOperations: window.gdnTest.operations.length - operationsBeforeSwitch,
+        };
+        plugin.google.load = originalLoad;
+        window.gdnTest.items = originalItems;
+        await window.app.workspace.getLeaf(false).openFile(window.app.vault.getAbstractFileByPath('2026-09-19.md'));
+        await plugin.persist();
+        await window.app.plugins.disablePlugin('google-daily-notes');
+        await window.app.plugins.enablePlugin('google-daily-notes');
+        return result;
+    }, switchTask);
+    assert.equal(switchResult.extraOperations, 0, 'Switching notes cannot send a false completion to Google');
+    assert.deepEqual(switchResult.laterRetained, [], 'A different note cannot acquire a completion retention flag');
+    assert.doesNotMatch(switchResult.later, /Completed in the earlier note/);
+    assert.match(switchResult.earlier, /\[x\] Completed in the earlier note/);
+    assert.deepEqual(switchResult.earlierRetained, [switchTask.key], 'Keep the task where it was actually completed');
+    console.log('PASS: switching notes during a save cannot transfer completions; the original completed entry stays.');
+
     await page.evaluate(() => { window.app.setting.open(); window.app.setting.openTabById('google-daily-notes'); });
     let settingsPage;
     for (let attempt = 0; attempt < 20; attempt++) {
