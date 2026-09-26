@@ -17,6 +17,6 @@ The automated tests cover Markdown preservation, row protection, dates and DST, 
 
 `test:mobile` uses Obsidian's mobile UI emulation at phone width. It verifies metadata hiding, checkboxes, task editing and creation, Source mode, foreground refresh, and device state isolation. The mobile runtime test also loads the production bundle without Node, Electron or Buffer. Desktop-only HTTP is loaded lazily when starting desktop OAuth.
 
-Verified here: macOS desktop and mobile UI emulation with mocked Google responses. Physical iOS/Android devices and native Windows/Linux installations still need verification; emulation does not prove WebView, soft keyboard, app suspension or live mobile OAuth behavior.
+Verified here: macOS desktop and mobile UI emulation with mocked Google responses. On 26 September 2026, the user also confirmed that setup by code and independent Google sync worked on a physical iPhone with Obsidian closed on the Mac. Android and native Windows/Linux installations still need verification. The iPhone check does not cover every editing or app-suspension scenario.
 
 The installed Obsidian 1.13.7 can emit a native-window `getZoomFactor` exception in the isolated desktop profile. It also occurs with the unchanged 0.8.2 plugin. The harness records that exact core exception separately in `hostErrors`; other renderer exceptions fail the checks.
