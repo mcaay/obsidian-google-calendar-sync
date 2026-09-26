@@ -5,6 +5,7 @@ npm ci
 npm run dev          # Watch build
 npm run check        # Lint, behavior tests, strict type check, production build
 npm run test:obsidian
+npm run test:mobile
 npm run package
 ```
 
@@ -13,3 +14,9 @@ npm run package
 Production builds enter at `src/main.ts`; test fixtures are never bundled into the installable plugin. Start reading the implementation at the `How to read this code` comment in that file.
 
 The automated tests cover Markdown preservation, row protection, dates and DST, overdue filtering, Google request bodies and pagination, conflict handling, task reconciliation, OAuth refresh, and scheduler timing. The app checks cover actual editor behavior. A successful test run with fixtures does not establish a live connection to your Google account.
+
+`test:mobile` uses Obsidian's mobile UI emulation at phone width. It verifies metadata hiding, checkboxes, task editing and creation, Source mode, foreground refresh, and device state isolation. The mobile runtime test also loads the production bundle without Node, Electron or Buffer. Desktop-only HTTP is loaded lazily when starting desktop OAuth.
+
+Verified here: macOS desktop and mobile UI emulation with mocked Google responses. Physical iOS/Android devices and native Windows/Linux installations still need verification; emulation does not prove WebView, soft keyboard, app suspension or live mobile OAuth behavior.
+
+The installed Obsidian 1.13.7 can emit a native-window `getZoomFactor` exception in the isolated desktop profile. It also occurs with the unchanged 0.8.2 plugin. The harness records that exact core exception separately in `hostErrors`; other renderer exceptions fail the checks.

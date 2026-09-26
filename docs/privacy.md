@@ -5,9 +5,9 @@ title: Privacy policy
 
 # Privacy policy
 
-Updated: 19 September 2026
+Updated: 26 September 2026
 
-This policy describes **Calendar Sync by mcaay**, a desktop Obsidian plugin.
+This policy describes **Calendar Sync by mcaay**, an Obsidian plugin.
 
 ## Google data accessed and used
 
@@ -29,9 +29,15 @@ The plugin does not send other note text, vault filenames, or the contents of yo
 
 ## Local storage and retention
 
-Synced rows are stored in your Markdown notes. The plugin's local `data.json` stores source selections, item identifiers and snapshots, note paths, synchronization state, pending edits, and deleted-task snapshots and replacement IDs for native undo. OAuth tokens and the OAuth client secret are stored through Obsidian SecretStorage, separately from `data.json`. This is Obsidian-managed storage; the plugin does not provide its own encryption of your vault or guarantee that every storage location is encrypted.
+Synced rows are stored in your Markdown notes. The plugin's `data.json` stores source selections and shared settings. Each device keeps item snapshots, note paths, pending requests, and undo state in vault-specific local storage, separate from Obsidian Sync. Older versions stored this state in `data.json`; upgrading migrates the original desktop's pending work before removing runtime state from that file. OAuth tokens and the OAuth client secret are stored through Obsidian SecretStorage, separately from `data.json`. This is Obsidian-managed storage; the plugin does not provide its own encryption of your vault or guarantee that every storage location is encrypted.
 
 Local notes and plugin state remain until you remove them. There is no automatic age-based deletion of stored notes or synchronization state. Your own vault synchronization, backups, publishing settings, other plugins, and device access can affect who can access local files. Those services and settings are outside this plugin's control.
+
+## Connecting another device
+
+Selecting **Create setup code** encrypts the Google refresh token and OAuth client configuration with AES-GCM using a random 100-bit setup code. Only the encrypted package is written to `data.json` for Obsidian Sync to carry to your other device. The setup code is shown locally and never saved by the plugin. The receiving device verifies the connection with Google and stores its credentials in SecretStorage.
+
+Import removes the package from the current plugin settings. Sync history and backups can retain encrypted copies. The plugin rejects imports after 30 minutes, but this is not a Google token expiry or a guarantee that historical ciphertext becomes undecryptable. Keep the setup code private; revoking the app in Google invalidates the underlying Google authorization.
 
 ## Sharing and other uses
 

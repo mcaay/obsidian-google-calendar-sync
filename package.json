@@ -1,6 +1,6 @@
 {
     "name": "google-daily-notes",
-    "version": "0.8.2",
+    "version": "0.9.0",
     "private": true,
     "description": "Google Calendar and Tasks as editable Markdown in Obsidian daily notes.",
     "scripts": {
@@ -11,7 +11,8 @@
         "test": "vitest run",
         "test:obsidian": "node scripts/test-obsidian.mjs",
         "check": "npm run lint && npm test && npm run build",
-        "package": "npm run build && node scripts/package.mjs"
+        "package": "npm run build && node scripts/package.mjs",
+        "test:mobile": "node scripts/test-obsidian.mjs --mobile"
     },
     "devDependencies": {
         "@codemirror/state": "^6.5.0",

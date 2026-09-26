@@ -184,5 +184,11 @@ export class Controller {
         this.scheduler.resetPeriodic();
     }
 
+    resume(): void {
+        for (const path of this.scheduler.dirty) this.scheduler.normal(path);
+        this.scheduleDeletions();
+        this.reconnect();
+    }
+
     dispose(): void { this.disposed = true; clearTimeout(this.deletionTimer); this.engine.stopped = true; this.scheduler.dispose(); }
 }

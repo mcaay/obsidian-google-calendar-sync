@@ -1,6 +1,7 @@
-import { PluginSettingTab, Setting, type App, type ButtonComponent } from 'obsidian';
+import { Platform, PluginSettingTab, Setting, type App, type ButtonComponent } from 'obsidian';
 import { CLIENT_SECRET_KEY } from './auth';
 import type GoogleDailyNotes from './main';
+import { deviceConnectionSettings } from './device-connection-settings';
 
 export class GoogleSettingsTab extends PluginSettingTab {
     constructor(app: App, private plugin: GoogleDailyNotes) { super(app, plugin); }
@@ -11,43 +12,48 @@ export class GoogleSettingsTab extends PluginSettingTab {
         const settings = plugin.data.settings;
         root.empty();
         new Setting(root).setName('Google account').setHeading();
-        root.createEl('p', { text: 'Connect your own Google desktop OAuth client. Calendar titles and task edits go directly to Google. Other note content stays in your vault.' });
-        root.createEl('a', { text: 'OAuth setup guide', href: 'https://developers.google.com/identity/protocols/oauth2/native-app' });
-        new Setting(root).setName('Desktop OAuth client ID').addText(text => text.setPlaceholder('...apps.googleusercontent.com').setValue(settings.clientId).onChange(async value => {
-            settings.clientId = value.trim(); await plugin.persist();
-        }));
-        new Setting(root).setName('Desktop OAuth client secret').setDesc('Stored in Obsidian SecretStorage, outside plugin data.json.').addText(text => {
-            text.inputEl.type = 'password';
-            text.setValue(this.app.secretStorage.getSecret(CLIENT_SECRET_KEY) ?? '').onChange(value => this.app.secretStorage.setSecret(CLIENT_SECRET_KEY, value.trim()));
-        });
+        if (!Platform.isMobile) {
+            root.createEl('p', { text: 'Connect your own Google desktop OAuth client. Calendar titles and task edits go directly to Google. Other note content stays in your vault.' });
+            root.createEl('a', { text: 'OAuth setup guide', href: 'https://developers.google.com/identity/protocols/oauth2/native-app' });
+            new Setting(root).setName('Desktop OAuth client ID').addText(text => text.setPlaceholder('...apps.googleusercontent.com').setValue(settings.clientId).onChange(async value => {
+                settings.clientId = value.trim(); await plugin.persist();
+            }));
+            new Setting(root).setName('Desktop OAuth client secret').setDesc('Stored in Obsidian SecretStorage, outside plugin data.json.').addText(text => {
+                text.inputEl.type = 'password';
+                text.setValue(this.app.secretStorage.getSecret(CLIENT_SECRET_KEY) ?? '').onChange(value => this.app.secretStorage.setSecret(CLIENT_SECRET_KEY, value.trim()));
+            });
+        }
         const message = root.createEl('p', { cls: 'gdn-connection-status', text: plugin.auth.connected() ? 'Connected' : 'Not connected' });
-        const connection = new Setting(root).setName('Connection');
-        let linkInput!: HTMLInputElement;
-        const linkSetting = new Setting(root).setName('Google sign-in link').setDesc('Copy this link into your preferred browser. It expires after 30 minutes.').addText(text => {
-            linkInput = text.inputEl;
-            linkInput.readOnly = true;
-            linkInput.setAttribute('aria-label', 'Google sign-in link');
-        });
-        linkSetting.settingEl.hide();
-        const connect = async (button: ButtonComponent, chooseBrowser = false) => {
-            button.setDisabled(true); message.setText('Continue in your browser.');
-            try {
-                await plugin.auth.connect(chooseBrowser ? async url => {
-                    linkInput.value = url;
-                    linkSetting.settingEl.show();
-                    message.setText('Open the sign-in link below in your preferred browser.');
-                    linkInput.focus(); linkInput.select();
-                } : undefined);
-                await plugin.refreshSources();
-                plugin.controller.reconnect(); this.display();
-            } catch (error) { message.setText(error instanceof Error ? error.message : 'Connection failed.'); }
-            finally { button.setDisabled(false); linkInput.value = ''; linkSetting.settingEl.hide(); }
-        };
-        connection.addButton(button => button.setButtonText(plugin.auth.connected() ? 'Reconnect Google' : 'Connect Google').setCta().onClick(() => connect(button)))
-            .addButton(button => button.setButtonText('Use another browser').onClick(() => connect(button, true)))
-            .addButton(button => button.setButtonText('Disconnect').onClick(() => {
+        if (!Platform.isMobile) {
+            const connection = new Setting(root).setName('Connection');
+            let linkInput!: HTMLInputElement;
+            const linkSetting = new Setting(root).setName('Google sign-in link').setDesc('Copy this link into your preferred browser. It expires after 30 minutes.').addText(text => {
+                linkInput = text.inputEl;
+                linkInput.readOnly = true;
+                linkInput.setAttribute('aria-label', 'Google sign-in link');
+            });
+            linkSetting.settingEl.hide();
+            const connect = async (button: ButtonComponent, chooseBrowser = false) => {
+                button.setDisabled(true); message.setText('Continue in your browser.');
+                try {
+                    await plugin.auth.connect(chooseBrowser ? async url => {
+                        linkInput.value = url;
+                        linkSetting.settingEl.show();
+                        message.setText('Open the sign-in link below in your preferred browser.');
+                        linkInput.focus(); linkInput.select();
+                    } : undefined);
+                    await plugin.refreshSources();
+                    plugin.controller.reconnect(); this.display();
+                } catch (error) { message.setText(error instanceof Error ? error.message : 'Connection failed.'); }
+                finally { button.setDisabled(false); linkInput.value = ''; linkSetting.settingEl.hide(); }
+            };
+            connection.addButton(button => button.setButtonText(plugin.auth.connected() ? 'Reconnect Google' : 'Connect Google').setCta().onClick(() => connect(button)))
+                .addButton(button => button.setButtonText('Use another browser').onClick(() => connect(button, true)));
+        }
+        if (plugin.auth.connected()) new Setting(root).setName('Connection').addButton(button => button.setButtonText('Disconnect').onClick(() => {
             plugin.auth.disconnect(); plugin.controller.setStatus('Disconnected'); this.display();
         }));
+        deviceConnectionSettings(root, plugin, () => this.display());
         new Setting(root).setName('Calendars and task lists').setHeading();
         new Setting(root).setName('Available sources').setDesc('Refresh after adding or sharing a calendar or task list.').addButton(button => button.setButtonText('Refresh sources').setDisabled(!plugin.auth.connected()).onClick(async () => {
             try { await plugin.refreshSources(); this.display(); }

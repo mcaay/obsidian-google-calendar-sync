@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { GoogleError } from './http';
 import { draftTitle, itemKey, noteDate, readRow, regions, renderNote, rowKey, visibleRow } from './markdown';
 import type { Item, Operation, PluginData, Remote } from './types';
@@ -174,7 +173,7 @@ export class SyncEngine {
                 }
             } else if (record) {
                 record.deleted = false;
-                record.restoredKey = `new:${randomUUID()}`;
+                record.restoredKey = this.draftKey();
             }
         }
     }
@@ -186,8 +185,20 @@ export class SyncEngine {
         };
     }
 
+    private draftKey(): string {
+        return `new:${this.data.runtimeOwner ? this.data.runtimeOwner + ':' : ''}${crypto.randomUUID()}`;
+    }
+
     private async stage(path: string, text: string, date: string, titles: boolean): Promise<string> {
-        const state = this.data.notes[path] ??= { rows: {}, retained: [] };
+        // A note first opened on another device has no local baseline. Preserve
+        // its checked history, but do not treat those rows as edits to Google.
+        const state = this.data.notes[path] ??= {
+            rows: {},
+            retained: regions(text).flatMap(region => region.lines.flatMap(line => {
+                const key = rowKey(line.text);
+                return key && !key.startsWith('new:') && visibleRow(line.text)?.done ? [key] : [];
+            })),
+        };
         let prepared = text;
         const edits: { from: number; to: number; text: string }[] = [];
         // Journal explicit undo before any insert. Its stable row identity lets
@@ -217,6 +228,11 @@ export class SyncEngine {
                 state.rows[key] = snapshot;
             }
             if (region.section === 'tasks' && titles && !restoration && (!key || key.startsWith('new:'))) {
+                // Sync can deliver an in-flight draft from another device. Only
+                // its owner may insert it; otherwise both devices could POST.
+                // Locally journaled legacy drafts remain recoverable on upgrade.
+                if (key && this.data.runtimeOwner && !key.startsWith(`new:${this.data.runtimeOwner}:`)
+                    && !this.data.outbox[key] && !this.data.created[key]) continue;
                 const draft = key ? visibleRow(line.text) : draftTitle(line.text);
                 const created = key ? this.data.created[key] : undefined;
                 if (created) {
@@ -225,7 +241,7 @@ export class SyncEngine {
                     if (!snapshot) continue;
                     snapshot = { ...snapshot, ...created, key: itemKey('task', created.source, created.id) };
                 } else if (draft?.title.trim()) {
-                    key ??= `new:${randomUUID()}`;
+                    key ??= this.draftKey();
                     const existing = this.data.outbox[key];
                     const source = existing?.source ?? this.data.settings.defaultTaskList;
                     if (!source) throw new Error('Choose a default Google Tasks list in plugin settings.');

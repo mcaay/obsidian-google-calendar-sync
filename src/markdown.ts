@@ -1,4 +1,5 @@
 import { validDate } from './dates';
+import { base64url } from './encoding';
 import type { Edit, Item, Section } from './types';
 
 export const SECTIONS: Section[] = ['events', 'recurring', 'tasks'];
@@ -96,7 +97,7 @@ export function regions(text: string, indentUnit = '    '): Region[] {
 }
 
 export function itemKey(kind: 'event' | 'task', source: string, id: string): string {
-    return Buffer.from(JSON.stringify([kind, source, id])).toString('base64url');
+    return base64url(new TextEncoder().encode(JSON.stringify([kind, source, id])));
 }
 
 export function rowKey(line: string): string | undefined {

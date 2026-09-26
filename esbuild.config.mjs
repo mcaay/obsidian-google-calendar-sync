@@ -1,14 +1,13 @@
 import esbuild from 'esbuild';
-import { builtinModules } from 'node:module';
 
 const production = process.argv.includes('production');
 const options = {
     entryPoints: ['src/main.ts'],
     bundle: true,
-    external: ['obsidian', 'electron', '@codemirror/*', '@lezer/*', ...builtinModules, ...builtinModules.map(name => `node:${name}`)],
+    external: ['obsidian', 'node:http', '@codemirror/*', '@lezer/*'],
     format: 'cjs',
     target: 'es2022',
-    platform: 'node',
+    platform: 'browser',
     outfile: 'main.js',
     sourcemap: production ? false : 'inline',
     minify: production,

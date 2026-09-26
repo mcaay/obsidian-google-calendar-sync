@@ -1,11 +1,11 @@
-import { Plugin, requestUrl } from 'obsidian';
-import { shell } from 'electron';
+import { Platform, Plugin, requestUrl } from 'obsidian';
 import { GoogleAuth } from './auth';
 import { GoogleClient } from './google';
 import { Controller } from './controller';
 import { editorExtension } from './editor';
 import { GoogleSettingsTab } from './settings';
 import { initialData, type PluginData } from './types';
+import { DEVICE_STATE_KEY, deviceSnapshot, restoreDeviceState, sharedSnapshot } from './device-state';
 import type { Transport } from './http';
 
 /**
@@ -24,11 +24,13 @@ export default class GoogleDailyNotes extends Plugin {
     google!: GoogleClient;
     controller!: Controller;
     private saving: Promise<void> = Promise.resolve();
+    private sharedJSON = '';
 
     async onload(): Promise<void> {
         const stored = await this.loadData() as Partial<PluginData> | null;
-        const defaults = initialData();
-        this.data = { ...defaults, ...stored, settings: { ...defaults.settings, ...stored?.settings } };
+        this.sharedJSON = JSON.stringify(stored);
+        this.data = restoreDeviceState(stored, this.app.loadLocalStorage(DEVICE_STATE_KEY) as ReturnType<typeof deviceSnapshot> | null, Platform.isMobile);
+        this.app.saveLocalStorage(DEVICE_STATE_KEY, deviceSnapshot(this.data));
         const transport: Transport = async request => {
             let timer: ReturnType<typeof setTimeout> | undefined;
             try {
@@ -39,7 +41,7 @@ export default class GoogleDailyNotes extends Plugin {
                 return { status: response.status, json: response.text ? response.json as unknown : {} };
             } finally { if (timer) clearTimeout(timer); }
         };
-        this.auth = new GoogleAuth(this.app.secretStorage, () => this.data.settings.clientId, transport, url => shell.openExternal(url));
+        this.auth = new GoogleAuth(this.app.secretStorage, () => this.data.settings.clientId, transport, async url => { window.open(url, '_external'); }, Platform.isMobile);
         this.google = new GoogleClient(transport, force => this.auth.token(force));
         this.controller = new Controller(this, this.data, this.google, () => this.persist(), () => this.auth.connected());
         this.registerEditorExtension(editorExtension({
@@ -59,13 +61,35 @@ export default class GoogleDailyNotes extends Plugin {
             },
         });
         this.app.workspace.onLayoutReady(() => this.controller.start());
+        this.registerDomEvent(document, 'visibilitychange', () => {
+            if (Platform.isMobile && document.visibilityState === 'visible') this.controller.resume();
+        });
+        this.registerDomEvent(window, 'online', () => this.controller.resume());
         this.register(() => { this.controller.dispose(); this.auth.dispose(); });
     }
 
     async persist(): Promise<void> {
-        const snapshot = structuredClone(this.data);
-        this.saving = this.saving.catch(() => undefined).then(() => this.saveData(snapshot));
+        this.app.saveLocalStorage(DEVICE_STATE_KEY, deviceSnapshot(this.data));
+        const snapshot = sharedSnapshot(this.data);
+        const serialized = JSON.stringify(snapshot);
+        if (serialized === this.sharedJSON) return this.saving;
+        this.sharedJSON = serialized;
+        this.saving = this.saving.catch(() => undefined).then(() => this.saveData(snapshot)).catch(error => {
+            if (this.sharedJSON === serialized) this.sharedJSON = '';
+            throw error;
+        });
         return this.saving;
+    }
+
+    async onExternalSettingsChange(): Promise<void> {
+        const shared = await this.loadData() as Partial<PluginData> | null;
+        if (!shared) return;
+        this.sharedJSON = JSON.stringify(shared);
+        const settings = { ...initialData().settings, ...shared.settings };
+        const changed = JSON.stringify(settings) !== JSON.stringify(this.data.settings);
+        Object.assign(this.data.settings, settings);
+        this.data.connectionTransfer = shared.connectionTransfer;
+        if (changed) this.controller.reconnect();
     }
 
     async refreshSources(): Promise<void> {

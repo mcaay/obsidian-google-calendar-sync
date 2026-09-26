@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SecretStorage } from 'obsidian';
-import { GoogleAuth } from '../src/auth';
+import { CLIENT_SECRET_KEY, GoogleAuth } from '../src/auth';
+import { encryptConnection } from '../src/connection-transfer';
 
 function setup(expires: number) {
     const values = new Map<string, string>([['google-daily-notes-oauth', JSON.stringify({ clientId: 'client', access: 'old-access', refresh: 'refresh', expires })]]);
@@ -10,6 +11,29 @@ function setup(expires: number) {
 }
 
 describe('OAuth token management', () => {
+    it('imports a synced connection into local secrets and refreshes directly on mobile', async () => {
+        const values = new Map<string, string>();
+        const secrets = { getSecret: (key: string) => values.get(key) ?? null, setSecret: (key: string, value: string) => values.set(key, value) } as unknown as SecretStorage;
+        const transport = vi.fn(async () => ({ status: 200, json: { access_token: 'mobile-access', expires_in: 3600 } }));
+        const auth = new GoogleAuth(secrets, () => 'test.apps.googleusercontent.com', transport, async () => undefined, true);
+        const { transfer, code } = await encryptConnection({ clientId: 'test.apps.googleusercontent.com', clientSecret: 'secret', refresh: 'refresh' });
+        await auth.importConnection(transfer, code);
+        expect(auth.connected()).toBe(true);
+        expect(await auth.token()).toBe('mobile-access');
+        expect(values.get(CLIENT_SECRET_KEY)).toBe('secret');
+        expect(transport.mock.calls[0]).toBeDefined();
+        await auth.token(true);
+        expect(transport).toHaveBeenCalledTimes(2);
+        await expect(auth.connect()).rejects.toThrow('setup code');
+    });
+    it('keeps the current connection when importing an invalid or rejected package', async () => {
+        const h = setup(Date.now() + 120000);
+        const before = new Map(h.values);
+        const { transfer, code } = await encryptConnection({ clientId: 'other.apps.googleusercontent.com', clientSecret: 'secret', refresh: 'refresh' });
+        await expect(h.auth.importConnection(transfer, code)).rejects.toThrow('settings');
+        expect(h.values).toEqual(before);
+        expect(h.transport).not.toHaveBeenCalled();
+    });
     it('can authorize in a chosen browser without opening the system browser', async () => {
         const values = new Map<string, string>();
         const secrets = { getSecret: (key: string) => values.get(key) ?? null, setSecret: (key: string, value: string) => values.set(key, value) } as unknown as SecretStorage;

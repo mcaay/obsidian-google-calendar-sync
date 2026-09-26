@@ -1,5 +1,6 @@
-import { createHash, randomBytes } from 'node:crypto';
-import { createServer, type Server } from 'node:http';
+import type { Server } from 'node:http';
+import { base64url } from './encoding';
+import { encryptConnection, decryptConnection, type ConnectionTransfer } from './connection-transfer';
 import type { SecretStorage } from 'obsidian';
 import type { Transport } from './http';
 
@@ -19,7 +20,7 @@ export class GoogleAuth {
     private refreshing?: Promise<string>;
     private generation = 0;
 
-    constructor(private secrets: SecretStorage, private clientId: () => string, private transport: Transport, private openBrowser: (url: string) => Promise<void>) {}
+    constructor(private secrets: SecretStorage, private clientId: () => string, private transport: Transport, private openBrowser: (url: string) => Promise<void>, private mobile = false) {}
 
     connected(): boolean { return Boolean(this.read()?.refresh); }
 
@@ -58,10 +59,14 @@ export class GoogleAuth {
     }
 
     async connect(openBrowser = this.openBrowser): Promise<void> {
+        if (this.mobile) throw new Error('Use the setup code from your connected computer.');
         if (this.server) throw new Error('Google sign-in is already open in your browser.');
         if (!this.clientId().endsWith('.apps.googleusercontent.com')) throw new Error('Enter your Google desktop OAuth client ID first.');
-        const verifier = randomBytes(32).toString('base64url');
-        const state = randomBytes(32).toString('base64url');
+        const verifier = base64url(crypto.getRandomValues(new Uint8Array(32)));
+        const challenge = base64url(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))));
+        const state = base64url(crypto.getRandomValues(new Uint8Array(32)));
+        // Import only when desktop sign-in is invoked. Mobile has no Node HTTP.
+        const { createServer } = await import('node:http');
         const server = createServer();
         this.server = server;
         try {
@@ -93,12 +98,38 @@ export class GoogleAuth {
                 url.search = new URLSearchParams({
                     client_id: this.clientId(), redirect_uri: redirect, response_type: 'code',
                     scope: SCOPES.join(' '), state, access_type: 'offline', prompt: 'consent',
-                    code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256',
+                    code_challenge: challenge, code_challenge_method: 'S256',
                 }).toString();
                 void openBrowser(url.toString()).catch(error => finish(error as Error));
             });
             await this.exchange({ code, redirect_uri: redirect, grant_type: 'authorization_code', code_verifier: verifier });
         } finally { this.dispose(); }
+    }
+
+    async shareConnection(): Promise<{ transfer: ConnectionTransfer; code: string }> {
+        const tokens = this.read();
+        if (!tokens) throw new Error('Connect Google on this device first.');
+        return encryptConnection({ clientId: tokens.clientId, refresh: tokens.refresh, clientSecret: this.secrets.getSecret(CLIENT_SECRET_KEY) ?? '' });
+    }
+
+    async importConnection(transfer: ConnectionTransfer, code: string): Promise<void> {
+        const generation = this.generation;
+        const credentials = await decryptConnection(transfer, code);
+        if (credentials.clientId !== this.clientId()) throw new Error('Wait for the Google client settings to finish syncing, then try again.');
+        // Validate with Google before replacing this device's existing connection.
+        const response = await this.transport({
+            url: 'https://oauth2.googleapis.com/token', method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ client_id: credentials.clientId, client_secret: credentials.clientSecret,
+                grant_type: 'refresh_token', refresh_token: credentials.refresh }).toString(),
+        });
+        if (response.status !== 200) throw new Error('Google rejected the connection. Reconnect on your computer and create a new setup code.');
+        if (generation !== this.generation || credentials.clientId !== this.clientId()) throw new Error('Google connection changed while signing in.');
+        const body = response.json as { access_token: string; expires_in: number; refresh_token?: string };
+        if (!body.access_token || !Number.isFinite(body.expires_in)) throw new Error('Google returned an incomplete connection. Try again.');
+        this.secrets.setSecret(CLIENT_SECRET_KEY, credentials.clientSecret);
+        this.secrets.setSecret(AUTH_KEY, JSON.stringify({ clientId: credentials.clientId, access: body.access_token,
+            refresh: body.refresh_token ?? credentials.refresh, expires: Date.now() + body.expires_in * 1000 } satisfies Tokens));
     }
 
     disconnect(): void {

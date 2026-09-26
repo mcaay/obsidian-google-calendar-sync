@@ -40,6 +40,44 @@ function harness(items: Item[] = [item()]) {
 }
 
 describe('synchronization', () => {
+    it('does not create an in-flight task received from another device through Sync', async () => {
+        const h = harness([]);
+        h.data.runtimeOwner = 'phone';
+        h.state.text = EMPTY.replace('<!-- gdn:tasks -->\n', '<!-- gdn:tasks -->\n    - [ ] Desktop draft <!-- gdn:new:desktop:123 -->\n');
+        await h.engine.run(PATH, true);
+        expect(h.remote.create).not.toHaveBeenCalled();
+        expect(h.state.text).toContain('Desktop draft <!-- gdn:new:desktop:123 -->');
+    });
+    it('recovers its own draft identity if a crash lost the journal after writing the row', async () => {
+        const h = harness([]);
+        h.data.runtimeOwner = 'phone';
+        h.state.text = EMPTY.replace('<!-- gdn:tasks -->\n', '<!-- gdn:tasks -->\n    - [ ] Phone draft\n');
+        vi.mocked(h.remote.create).mockRejectedValueOnce(new Error('Offline'));
+        await expect(h.engine.run(PATH, true)).rejects.toThrow('Offline');
+        expect(h.state.text).toContain('<!-- gdn:new:phone:');
+        h.data.outbox = {};
+        h.data.notes[PATH]!.rows = {};
+        await h.engine.run(PATH, true);
+        expect(h.items.filter(item => item.title === 'Phone draft')).toHaveLength(1);
+        expect(h.state.text).not.toContain('gdn:new:');
+    });
+    it('preserves checked history when a synced note is first opened on another device', async () => {
+        const h = harness([item({ date: '2026-09-18', done: true })]);
+        delete h.data.notes[PATH];
+        await h.engine.run(PATH, true);
+        expect(h.remote.load).toHaveBeenCalledWith(DATE, h.data.settings, [h.items[0]!.key]);
+        expect(h.state.text).toContain('[x] Buy coffee');
+        expect(h.remote.patch).not.toHaveBeenCalled();
+    });
+    it('does not retain unchecked stale rows when a new device first opens a note', async () => {
+        const h = harness([item({ date: '2026-09-18' })]);
+        delete h.data.notes[PATH];
+        vi.mocked(h.remote.load).mockResolvedValueOnce([]);
+        await h.engine.run(PATH, true);
+        expect(h.data.notes[PATH]!.retained).toEqual([]);
+        expect(h.state.text).not.toContain('Buy coffee');
+        expect(h.remote.patch).not.toHaveBeenCalled();
+    });
     it('follows indentation changes on the next sync without sending Google edits', async () => {
         const h = harness([event(), item()]);
         for (const indent of ['\t', '  ', '        ']) {

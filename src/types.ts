@@ -1,3 +1,5 @@
+import type { ConnectionTransfer } from './connection-transfer';
+
 export type Section = 'events' | 'recurring' | 'tasks';
 export type Kind = 'event' | 'task';
 
@@ -68,7 +70,9 @@ export interface Operation extends Edit {
 }
 
 export interface PluginData {
-    version: 1;
+    version: 1 | 2;
+    connectionTransfer?: ConnectionTransfer;
+    runtimeOwner?: string;
     settings: Settings;
     notes: Record<string, NoteState>;
     outbox: Record<string, Operation>;
@@ -78,7 +82,7 @@ export interface PluginData {
 }
 
 export function initialData(): PluginData {
-    return { version: 1, settings: structuredClone(DEFAULT_SETTINGS), notes: {}, outbox: {}, created: {}, deletedTasks: {} };
+    return { version: 2, settings: structuredClone(DEFAULT_SETTINGS), notes: {}, outbox: {}, created: {}, deletedTasks: {} };
 }
 
 export interface CalendarEvent {

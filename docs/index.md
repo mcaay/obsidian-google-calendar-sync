@@ -5,7 +5,7 @@ title: Calendar Sync by mcaay
 
 # Calendar Sync by mcaay
 
-Calendar Sync by mcaay is a desktop Obsidian plugin that brings Google Calendar events and scheduled Google Tasks into daily notes as ordinary, editable Markdown rows.
+Calendar Sync by mcaay is an Obsidian plugin that brings Google Calendar events and scheduled Google Tasks into daily notes as ordinary, editable Markdown rows.
 
 ## What it does
 

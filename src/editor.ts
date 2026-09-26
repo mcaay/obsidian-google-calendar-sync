@@ -1,6 +1,6 @@
 import { Annotation, EditorSelection, EditorState, StateField, Transaction, type Extension } from '@codemirror/state';
 import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate } from '@codemirror/view';
-import { editorInfoField, Keymap, MarkdownView, type KeymapEventHandler, type Scope } from 'obsidian';
+import { editorInfoField, editorLivePreviewField, Keymap, MarkdownView, type KeymapEventHandler, type Scope } from 'obsidian';
 import { itemKey, noteDate, permittedEdit, regions, ROW_ID, rowKey, visibleRow } from './markdown';
 import type { Item, PluginData } from './types';
 
@@ -65,6 +65,7 @@ function insertMode(view: EditorView): void {
 }
 
 function decorations(state: EditorState): DecorationSet {
+    if (!state.field(editorLivePreviewField, false)) return Decoration.none;
     const file = state.field(editorInfoField, false)?.file;
     if (!file || !noteDate(state.doc.toString(), file.basename)) return Decoration.none;
     try {
@@ -148,7 +149,9 @@ export function editorExtension(hooks: EditorHooks): Extension {
     };
     const hiddenMetadata = StateField.define<DecorationSet>({
         create: state => decorations(state),
-        update: (value, transaction) => transaction.docChanged ? decorations(transaction.state) : value,
+        update: (value, transaction) => transaction.docChanged
+            || transaction.state.field(editorLivePreviewField, false) !== transaction.startState.field(editorLivePreviewField, false)
+            ? decorations(transaction.state) : value,
         provide: field => [EditorView.decorations.from(field), EditorView.atomicRanges.of(view => view.state.field(field))],
     });
     return [

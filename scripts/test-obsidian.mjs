@@ -6,6 +6,9 @@ import { join } from 'node:path';
 import { builtinModules } from 'node:module';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { runMobileChecks } from './test-mobile-scenarios.mjs';
+
+const mobile = process.argv.includes('--mobile');
 
 const directory = await mkdtemp(join(tmpdir(), 'google-daily-notes-test-'));
 const profile = join(directory, 'profile');
@@ -18,7 +21,7 @@ const support = join(homedir(), 'Library/Application Support/obsidian');
 const updates = (await readdir(support)).filter(name => /^obsidian-.*\.asar$/.test(name)).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 if (updates.length) await cp(join(support, updates.at(-1)), join(profile, updates.at(-1)));
 await writeFile(join(profile, 'obsidian.json'), JSON.stringify({ vaults: { '1234567890abcdef': { path: vault, ts: Date.now(), open: true } } }));
-await writeFile(join(vault, '.obsidian/app.json'), JSON.stringify({ vimMode: true, useTab: true, tabSize: 4, propertiesInDocument: 'hidden', livePreview: true, showLineNumber: false, defaultViewMode: 'source', readableLineLength: true }));
+await writeFile(join(vault, '.obsidian/app.json'), JSON.stringify({ vimMode: !mobile, useTab: true, tabSize: 4, propertiesInDocument: mobile ? 'visible' : 'hidden', livePreview: true, showLineNumber: false, defaultViewMode: 'source', readableLineLength: true }));
 const plugins = ['google-daily-notes'];
 await writeFile(join(vault, '.obsidian/hotkeys.json'), JSON.stringify({ 'editor:toggle-checklist-status': [{ modifiers: ['Mod'], key: 'Enter' }] }));
 // Optional compatibility run against a locally installed Tasks plugin. Copy
@@ -60,13 +63,26 @@ try {
     };
     const page = await application.firstWindow();
     const errors = [];
-    page.on('pageerror', error => errors.push(error.message));
+    const hostErrors = [];
+    page.on('pageerror', error => {
+        // Reproduced with the unchanged 0.8.2 plugin in an isolated profile.
+        // Obsidian 1.13.7's native window status code calls a missing Electron API.
+        const knownHostError = error.message === 't.webContents.getZoomFactor is not a function'
+            && error.stack?.includes('e.updateStatus (app://obsidian.md/app.js:')
+            && !error.stack.includes('plugin:');
+        (knownHostError ? hostErrors : errors).push(error.message);
+        console.log(knownHostError ? 'Known Obsidian host exception:' : 'Renderer exception:', error.stack);
+    });
     page.on('console', message => { if (message.type() === 'error') console.log('Renderer:', message.text().slice(0, 300)); });
     await page.waitForFunction(() => window.app?.workspace?.layoutReady, { timeout: 30000 });
     assert.equal(await page.evaluate(() => window.app.vault.adapter.getBasePath()), vault, 'Refuse to run tests against a personal vault');
     console.log('Initial UI:', (await page.locator('body').innerText()).slice(0, 1200));
+    if (mobile) await page.evaluate(() => window.app.emulateMobile(true));
     const trust = page.getByText('Trust author and enable plugins', { exact: true });
-    if (await trust.isVisible()) await trust.click();
+    if (mobile) await trust.waitFor();
+    // The trust dialog can relayout while Electron finishes opening its window.
+    // This setup action is not a plugin interaction under test.
+    if (await trust.isVisible()) await trust.evaluate(button => button.click());
     await page.waitForFunction(() => Boolean(window.app?.plugins?.plugins?.['google-daily-notes']));
     for (const other of application.windows()) if (other !== page) await other.close();
     await page.bringToFront();
@@ -102,6 +118,12 @@ try {
         }, enabled);
         await page.waitForFunction(enabled => Boolean(window.app.workspace.activeEditor.editor.cm.cm?.state.vim) === enabled, enabled);
     };
+    if (mobile) {
+        await runMobileChecks(page);
+        assert.deepEqual(errors, [], 'No mobile renderer exceptions');
+        await writeFile('output/playwright/mobile-result.json', JSON.stringify({ passed: true, mode: 'Obsidian mobile UI emulation', vault, errors, hostErrors }, null, 2));
+        console.log('Mobile emulation checks passed.');
+    } else {
     const before = await editorText();
     const syncedRows = before.split('\n').filter(line => /<!-- gdn:[A-Za-z0-9_-]{10,} -->$/.test(line));
     assert.equal(syncedRows.length, 5);
@@ -456,8 +478,9 @@ try {
     await page.setViewportSize({ width: 1000, height: 900 });
     await page.screenshot({ path: 'output/playwright/daily-note-narrow.png' });
     assert.deepEqual(errors, [], 'No renderer exceptions');
-    await writeFile('output/playwright/result.json', JSON.stringify({ passed: true, vault, screenshots: ['daily-note.png', 'daily-note-narrow.png', 'settings.png'], errors }, null, 2));
+    await writeFile('output/playwright/result.json', JSON.stringify({ passed: true, vault, screenshots: ['daily-note.png', 'daily-note-narrow.png', 'settings.png'], errors, hostErrors }, null, 2));
     console.log('Obsidian integration checks passed.');
+    }
 } catch (error) {
     if (application) {
         for (const page of application.windows()) {

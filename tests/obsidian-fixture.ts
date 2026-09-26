@@ -2,6 +2,8 @@
 import GoogleDailyNotes from '../src/main';
 import { event, item } from './fixtures';
 import type { Item, Operation } from '../src/types';
+import { Platform } from 'obsidian';
+import { CLIENT_SECRET_KEY, GoogleAuth } from '../src/auth';
 
 interface TestState { items: Item[]; operations: Operation[]; loads: number }
 declare global { interface Window { gdnTest?: TestState } }
@@ -21,7 +23,13 @@ export default class FixturePlugin extends GoogleDailyNotes {
         this.data.settings.defaultTaskList = 'list';
         this.data.settings.calendars = [{ id: 'calendar', name: 'Example calendar', role: 'recurring', writable: true }];
         this.data.settings.taskLists = [{ id: 'list', name: 'Example tasks', enabled: true }];
-        this.auth.connected = () => true;
+        this.data.settings.clientId = 'fixture.apps.googleusercontent.com';
+        this.app.secretStorage.setSecret(CLIENT_SECRET_KEY, 'fixture-secret');
+        this.app.secretStorage.setSecret('google-daily-notes-oauth', JSON.stringify({ clientId: this.data.settings.clientId,
+            access: 'fixture-access', refresh: 'fixture-refresh', expires: Date.now() + 3600000 }));
+        this.auth.dispose();
+        this.auth = new GoogleAuth(this.app.secretStorage, () => this.data.settings.clientId,
+            async () => ({ status: 200, json: { access_token: 'fixture-access', expires_in: 3600 } }), async () => undefined, Platform.isMobile);
         this.google.load = async () => { fixture.loads++; return structuredClone(fixture.items); };
         this.google.sources = async () => ({ calendars: this.data.settings.calendars, taskLists: this.data.settings.taskLists });
         this.google.removeCreationMarker = async () => undefined;

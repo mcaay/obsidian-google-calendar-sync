@@ -8,3 +8,18 @@
 .gdn-connection-status {
     color: var(--text-muted);
 }
+
+/* Hide only our internal properties. Other note properties remain available;
+   Source mode still exposes the original frontmatter and row comments. */
+:is(.markdown-source-view.is-live-preview, .markdown-reading-view) .metadata-property:is([data-property-key="google-daily"], [data-property-key="google-daily-date"]) {
+    display: none;
+}
+
+:is(.markdown-source-view.is-live-preview, .markdown-reading-view) .metadata-container:has(.metadata-property[data-property-key="google-daily"]):not(:has(.metadata-property:not([data-property-key="google-daily"]):not([data-property-key="google-daily-date"]))) {
+    display: none;
+}
+
+.gdn-setup-code input {
+    font-family: var(--font-monospace);
+    width: 100%;
+}

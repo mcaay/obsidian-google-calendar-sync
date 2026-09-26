@@ -12,6 +12,20 @@ You need your own Google OAuth client. This setup connects Obsidian directly to 
 
 Google may expire refresh tokens after seven days while an external app remains in Testing. Use an appropriate production consent configuration for lasting personal use, subject to your account's Google policies. See [Google's OAuth documentation](https://developers.google.com/identity/protocols/oauth2/native-app) and [token expiration rules](https://developers.google.com/identity/protocols/oauth2#expiration).
 
+## Connect another device
+
+First connect Google on a Mac, Windows or Linux computer using the steps above.
+
+1. On both devices, enable **Installed community plugins** and **Active community plugin list** under **Settings → Sync**. Installed plugins includes their settings. Let Sync finish, then restart Obsidian on the phone so it loads the updated plugin.
+2. On the connected computer, open this plugin's settings and select **Create setup code**.
+3. On the phone, open this plugin's settings, enter the code under **Code from your connected device**, and select **Connect** within 30 minutes.
+
+Obsidian Sync carries an encrypted connection package. The code is displayed only on the exporting device and is not saved. After setup, each device stores its connection in SecretStorage and talks directly to Google; the computer can be closed. The same setup works for another computer.
+
+Keep the setup code private. Import removes the shared package, but Sync history or backups can retain encrypted copies. The 30-minute limit is enforced by this plugin, not by Google. Revoke the app in your Google account to invalidate the underlying authorization.
+
+Phones sync while Obsidian is open and resume when it returns to the foreground. Continuous background sync is not supported. Device-specific pending edits are kept separately, so syncing settings does not replay another device's requests.
+
 ## Daily-note template
 
 Add this to your daily-note template. Keep your existing frontmatter properties, adding `google-daily: true` to them rather than adding a second frontmatter block.
@@ -52,4 +66,4 @@ The generated rows look like this in Live Preview:
     - [ ] 📅 12:00 Call Sam
 ```
 
-Each synced row also contains an HTML comment identifying the Google item. The editor hides that comment and keeps the cursor out of it. It remains present in the Markdown file, so renaming a row cannot lose its identity. Keep the section markers and row comments intact when editing outside Obsidian.
+Each synced row also contains an HTML comment identifying the Google item. Live Preview hides that comment and keeps the cursor out of it. The plugin also hides its own properties by default; other properties stay visible. Source mode exposes the comments and frontmatter. It remains present in the Markdown file, so renaming a row cannot lose its identity. Keep the section markers and row comments intact when editing outside Obsidian.
