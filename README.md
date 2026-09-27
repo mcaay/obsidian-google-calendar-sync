@@ -55,4 +55,8 @@ Create and schedule Calendar events, including recurrence, in Google Calendar.
 
 The plugin connects directly to Google, with no telemetry. Other note text stays in your vault; credentials use Obsidian SecretStorage.
 
+## Review
+
+The code was reviewed by Opus 5.5, Fable 5.1 and GPT 6 Astra, and the fixes were implemented by Opus 5.5. You can read the reviews, the remarks on them and the fix plan in the [reviews](reviews) folder.
+
 [Keyboard and sync details](https://github.com/mcaay/obsidian-google-calendar-sync/blob/main/docs/behavior.md) · [Privacy](https://github.com/mcaay/obsidian-google-calendar-sync/blob/main/docs/privacy.md) · [Development](https://github.com/mcaay/obsidian-google-calendar-sync/blob/main/docs/development.md) · [MIT license](LICENSE)
