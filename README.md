@@ -32,14 +32,16 @@ google-daily: true
 - [ ] google tasks <!-- gdn:tasks -->
 ```
 
-Use `YYYY-MM-DD` filenames. Rename or move the three headings wherever you want; keep their comments. [Other date formats and template options](https://github.com/mcaay/obsidian-google-calendar-sync/blob/main/docs/setup.md#daily-note-template).
+Use `YYYY-MM-DD` filenames. Rename or move the three headings wherever you want; keep their comments. Only checkbox rows directly under **google tasks** become Google Tasks; other lines there stay in your note. [Other date formats and template options](https://github.com/mcaay/obsidian-google-calendar-sync/blob/main/docs/setup.md#daily-note-template).
 
 ## Use it
 
 - **Cmd/Ctrl+Enter** toggles tasks. Calendar titles starting with `⬜️` or `✅` also work as checkboxes when enabled in settings.
 - **Edit a title** and press Escape in Vim. Without Vim, edits sync after 10 seconds of inactivity.
 - **Vim `o` / `O`** on a Google Task creates another task due on the note's date.
-- **Vim `dd`** deletes from Google after 5 seconds. **`u` / Cmd+Z** within that window cancels deletion. Recurring Calendar events lose only that occurrence.
+- **Vim `yyp` / `ddp`** pastes a task row as a new task due on that note's date. `ddp` deletes the original after 5 seconds.
+- **Vim `dd`** deletes from Google after 5 seconds. **`u` / Cmd+Z** within that window cancels deletion; undo right after creating a task removes it. Recurring Calendar events lose only that occurrence.
+- **Hover `GCal:`** in the status bar to see what is syncing, waiting or failing.
 
 Create and schedule Calendar events, including recurrence, in Google Calendar.
 
@@ -47,6 +49,9 @@ Create and schedule Calendar events, including recurrence, in Google Calendar.
 
 - Google Tasks' API exposes dates, but no reminder times or recurrence controls. A typed `📅 13:00` stays in the title. Deleting an entire repeating task series cannot be guaranteed.
 - Undo after the 5-second window recreates a Google Task without its recurrence or reminder time. It cannot restore a deleted Calendar event.
+- Only edits made in Obsidian's editor reach Google. A change that arrives through Sync, another app or a plugin that writes the file shows Google's value again at the next sync.
+- Deleting a meeting you organize cancels it for all guests, without notification emails.
+- If Google's answer to a new task is lost, the plugin searches for the task before sending it again. Rarely, this still leaves a duplicate, which shows in the note.
 
 The plugin connects directly to Google, with no telemetry. Other note text stays in your vault; credentials use Obsidian SecretStorage.
 
