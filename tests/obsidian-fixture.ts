@@ -2,7 +2,6 @@
 import GoogleDailyNotes from '../src/main';
 import { event, item } from './fixtures';
 import type { Item, Operation } from '../src/types';
-import { Platform } from 'obsidian';
 import { CLIENT_SECRET_KEY, GoogleAuth } from '../src/auth';
 import { cleanTitle, googleTitle } from '../src/markdown';
 
@@ -30,7 +29,7 @@ export default class FixturePlugin extends GoogleDailyNotes {
             access: 'fixture-access', refresh: 'fixture-refresh', expires: Date.now() + 3600000 }));
         this.auth.dispose();
         this.auth = new GoogleAuth(this.app.secretStorage, () => this.data.settings.clientId,
-            async () => ({ status: 200, json: { access_token: 'fixture-access', expires_in: 3600 } }), async () => undefined, Platform.isMobile);
+            async () => ({ status: 200, json: { access_token: 'fixture-access', expires_in: 3600 } }), async () => undefined);
         // Items hold Google's plain titles; the real client escapes them on load.
         this.google.load = async () => { fixture.loads++; return { items: structuredClone(fixture.items).map(value => ({ ...value, title: cleanTitle(value.title) })), failed: [] }; };
         this.google.sources = async () => ({ calendars: this.data.settings.calendars, taskLists: this.data.settings.taskLists });

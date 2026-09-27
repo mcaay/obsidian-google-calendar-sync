@@ -6,8 +6,8 @@ export const MAX_INTERVAL = 24 * 3600;
 
 /** One queue prevents overlapping pulls, pushes, and note writes. */
 export class SyncScheduler {
-    private timer?: ReturnType<typeof setTimeout>;
-    private idle = new Map<string, ReturnType<typeof setTimeout>>();
+    private timer?: number;
+    private idle = new Map<string, number>();
     // pull: whether the run may skip reading Google when it sent nothing (4.5).
     private queue = new Map<string, { titles: boolean; pull: boolean; reset: boolean }>();
     private busy = false;
@@ -32,14 +32,14 @@ export class SyncScheduler {
     changed(path: string, vim: boolean, toggled: boolean): void {
         this.dirty.add(path);
         const old = this.idle.get(path);
-        if (old) clearTimeout(old);
+        if (old) window.clearTimeout(old);
         if (toggled) this.request(path, 'toggle', false);
-        if (!vim) this.idle.set(path, setTimeout(() => this.normal(path), 10000));
+        if (!vim) this.idle.set(path, window.setTimeout(() => this.normal(path), 10000));
     }
 
     normal(path: string): void {
         const timer = this.idle.get(path);
-        if (timer) clearTimeout(timer);
+        if (timer) window.clearTimeout(timer);
         this.idle.delete(path);
         if (this.dirty.delete(path)) this.request(path, 'edit', true);
     }
@@ -58,9 +58,9 @@ export class SyncScheduler {
     }
 
     resetPeriodic(): void {
-        if (this.timer) clearTimeout(this.timer);
+        if (this.timer) window.clearTimeout(this.timer);
         if (this.stopped) return;
-        this.timer = setTimeout(() => {
+        this.timer = window.setTimeout(() => {
             for (const path of this.paths()) this.request(path, 'periodic', !this.dirty.has(path));
             this.resetPeriodic();
         }, Math.min(MAX_INTERVAL, Math.max(MIN_INTERVAL, this.interval())) * 1000);
@@ -68,8 +68,8 @@ export class SyncScheduler {
 
     dispose(): void {
         this.stopped = true;
-        if (this.timer) clearTimeout(this.timer);
-        for (const timer of this.idle.values()) clearTimeout(timer);
+        if (this.timer) window.clearTimeout(this.timer);
+        for (const timer of this.idle.values()) window.clearTimeout(timer);
         this.idle.clear(); this.queue.clear(); this.dirty.clear();
     }
 }

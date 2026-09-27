@@ -1,57 +1,90 @@
-import { Platform, Setting } from 'obsidian';
+import { Platform, type SettingDefinitionGroup, type SettingTab } from 'obsidian';
 import type GoogleDailyNotes from './main';
 
-export function deviceConnectionSettings(root: HTMLElement, plugin: GoogleDailyNotes, refresh: () => void): void {
-    new Setting(root).setName(Platform.isMobile ? 'Connect through Obsidian Sync' : 'Connect another device').setHeading();
-    root.createEl('p', { text: 'Enable Installed community plugins and Active community plugin list in Obsidian Sync on both devices. Installed plugins includes their settings. The connection package is encrypted; the setup code is not saved.' });
-    const message = root.createEl('p', { cls: 'gdn-connection-status' });
-    if (plugin.auth.connected()) {
-        let output!: HTMLInputElement;
-        const codeSetting = new Setting(root).setName('Setup code').setDesc('Enter this on the other device within 30 minutes. Keep it private.').addText(text => {
-            output = text.inputEl;
-            output.readOnly = true;
-            output.setAttribute('aria-label', 'Setup code');
-        });
-        codeSetting.settingEl.addClass('gdn-setup-code');
-        codeSetting.settingEl.hide();
-        new Setting(root).setName('Share this Google connection').addButton(button => button.setButtonText('Create setup code').onClick(async () => {
-            button.setDisabled(true);
-            try {
-                const { transfer, code } = await plugin.auth.shareConnection();
-                plugin.data.connectionTransfer = transfer;
-                await plugin.persist();
-                output.value = code;
-                codeSetting.settingEl.show();
-                output.focus(); output.select();
-                message.setText('On the other device, open this plugin’s settings and enter the setup code.');
-            } catch (error) { message.setText(error instanceof Error ? error.message : 'Could not create setup code.'); }
-            finally { button.setDisabled(false); }
-        })).addButton(button => button.setButtonText('Cancel setup').onClick(async () => {
-            delete plugin.data.connectionTransfer;
-            await plugin.persist(); output.value = ''; codeSetting.settingEl.hide();
-            message.setText('Setup package removed.');
-        }));
-    }
+export function deviceConnectionSettings(plugin: GoogleDailyNotes, tab: SettingTab): SettingDefinitionGroup {
+    // The created code is shown in its own row, revealed by refreshDomState().
+    let setupCode = '';
+    let output: HTMLInputElement | undefined;
     let code = '';
-    let input!: HTMLInputElement;
-    new Setting(root).setName('Code from your connected device').addText(text => {
-        input = text.inputEl;
-        input.autocomplete = 'off'; input.spellcheck = false;
-        input.setAttribute('aria-label', 'Code from your connected device');
-        text.setPlaceholder('XXXX-XXXX-XXXX-XXXX-XXXX').onChange(value => { code = value; });
-    }).addButton(button => button.setButtonText('Connect').setCta().onClick(async () => {
-        button.setDisabled(true);
-        try {
-            await plugin.onExternalSettingsChange();
-            const transfer = plugin.data.connectionTransfer;
-            if (!transfer) throw new Error('Waiting for the connection package. Let Obsidian Sync finish on both devices, then try again.');
-            await plugin.auth.importConnection(transfer, code);
-            code = ''; input.value = '';
-            if (plugin.data.connectionTransfer?.encrypted === transfer.encrypted) delete plugin.data.connectionTransfer;
-            await plugin.persist();
-            plugin.controller.resume();
-            refresh();
-        } catch (error) { message.setText(error instanceof Error ? error.message : 'Could not connect.'); }
-        finally { button.setDisabled(false); }
-    }));
+    return {
+        type: 'group',
+        heading: Platform.isMobile ? 'Connect through Obsidian Sync' : 'Connect another device',
+        items: [
+            {
+                name: 'Obsidian Sync',
+                desc: createFragment(fragment => {
+                    fragment.appendText('Enable ');
+                    fragment.createEl('strong', { text: 'Installed community plugins' });
+                    fragment.appendText(' and ');
+                    fragment.createEl('strong', { text: 'Active community plugin list' });
+                    fragment.appendText(' on both devices. Installed plugins includes their settings. The connection package is encrypted; the setup code is not saved.');
+                }),
+            },
+            {
+                name: 'Share this Google connection',
+                visible: () => plugin.auth.connected(),
+                render: setting => {
+                    setting.addButton(button => button.setButtonText('Create setup code').onClick(async () => {
+                        button.setDisabled(true); setting.setErrorMessage(null);
+                        try {
+                            const shared = await plugin.auth.shareConnection();
+                            plugin.data.connectionTransfer = shared.transfer;
+                            await plugin.persist();
+                            setupCode = shared.code;
+                            tab.refreshDomState();
+                            if (output) { output.value = setupCode; output.focus(); output.select(); }
+                            setting.setDesc('On the other device, open this plugin’s settings and enter the setup code.');
+                        } catch (error) { setting.setErrorMessage(error instanceof Error ? error.message : 'Could not create setup code.'); }
+                        finally { button.setDisabled(false); }
+                    })).addButton(button => button.setButtonText('Cancel setup').onClick(async () => {
+                        delete plugin.data.connectionTransfer;
+                        await plugin.persist();
+                        setupCode = '';
+                        if (output) output.value = '';
+                        tab.refreshDomState();
+                        setting.setDesc('Setup package removed.');
+                    }));
+                },
+            },
+            {
+                name: 'Setup code',
+                desc: 'Enter this on the other device within 30 minutes. Keep it private.',
+                visible: () => setupCode !== '' && plugin.auth.connected(),
+                render: setting => {
+                    setting.settingEl.addClass('gdn-setup-code');
+                    setting.addText(text => {
+                        output = text.inputEl;
+                        output.readOnly = true;
+                        output.setAttribute('aria-label', 'Setup code');
+                    });
+                },
+            },
+            {
+                name: 'Code from your connected device',
+                render: setting => {
+                    let input!: HTMLInputElement;
+                    setting.addText(text => {
+                        input = text.inputEl;
+                        input.autocomplete = 'off'; input.spellcheck = false;
+                        input.setAttribute('aria-label', 'Code from your connected device');
+                        text.setPlaceholder('XXXX-XXXX-XXXX-XXXX-XXXX').onChange(value => { code = value; });
+                    }).addButton(button => button.setButtonText('Connect').setCta().onClick(async () => {
+                        button.setDisabled(true); setting.setErrorMessage(null);
+                        try {
+                            await plugin.onExternalSettingsChange();
+                            const transfer = plugin.data.connectionTransfer;
+                            if (!transfer) throw new Error('Waiting for the connection package. Let Obsidian Sync finish on both devices, then try again.');
+                            await plugin.auth.importConnection(transfer, code);
+                            code = ''; input.value = '';
+                            if (plugin.data.connectionTransfer?.encrypted === transfer.encrypted) delete plugin.data.connectionTransfer;
+                            await plugin.persist();
+                            plugin.controller.resume();
+                            tab.update();
+                        } catch (error) { setting.setErrorMessage(error instanceof Error ? error.message : 'Could not connect.'); }
+                        finally { button.setDisabled(false); }
+                    }));
+                },
+            },
+        ],
+    };
 }

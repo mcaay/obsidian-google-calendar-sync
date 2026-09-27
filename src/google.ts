@@ -18,7 +18,7 @@ export class GoogleClient implements Remote {
     private pausedUntil = 0;
     private quotaStreak = 0;
 
-    constructor(private transport: Transport, private token: (force?: boolean) => Promise<string>, private sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms)), private now = Date.now) {}
+    constructor(private transport: Transport, private token: (force?: boolean) => Promise<string>, private sleep = (ms: number) => new Promise(resolve => window.setTimeout(resolve, ms)), private now = Date.now) {}
 
     private async request<T>(url: string, method = 'GET', body?: unknown, etag?: string): Promise<T> {
         let refreshed = false;

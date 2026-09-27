@@ -13,7 +13,7 @@ npm run package
 
 Production builds enter at `src/main.ts`; test fixtures are never bundled into the installable plugin. Start reading the implementation at the `How to read this code` comment in that file.
 
-The automated tests cover Markdown preservation, row protection, dates and DST, overdue filtering, Google request bodies and pagination, conflict handling, task reconciliation, OAuth refresh, and scheduler timing. `tests/editor.test.ts` runs the editor extension with CodeMirror's real undo history and a real sync engine; `tests/google.test.ts` checks the overdue-event list against a full reading from a simulated Calendar server. The app checks cover actual editor behavior. A successful test run with fixtures does not establish a live connection to your Google account.
+The automated tests cover Markdown preservation, row protection, dates and DST, overdue filtering, Google request bodies and pagination, conflict handling, task reconciliation, OAuth refresh, and scheduler timing. `tests/editor.test.ts` runs the editor extension with CodeMirror's real undo history and a real sync engine; `tests/google.test.ts` checks the overdue-event list against a full reading from a simulated Calendar server. The app checks cover actual editor behavior and the settings tab, including validation, the sign-in link and settings search. A successful test run with fixtures does not establish a live connection to your Google account.
 
 `npm run typecheck` also checks `src` without Node globals (`tsconfig.src.json`), because the mobile runtime has none. The GitHub workflow in `.github/workflows/check.yml` runs lint, both type checks, the unit tests and the production build.
 

@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { runMobileChecks } from './test-mobile-scenarios.mjs';
 import { runEditorChecks } from './test-editor-scenarios.mjs';
+import { runSettingsChecks } from './test-settings-scenarios.mjs';
 
 const mobile = process.argv.includes('--mobile');
 
@@ -39,7 +40,7 @@ await writeFile(join(vault, '.obsidian/community-plugins.json'), JSON.stringify(
 await writeFile(join(vault, '.obsidian/core-plugins.json'), JSON.stringify(['file-explorer', 'daily-notes', 'templates']));
 await writeFile(join(vault, '2026-09-19.md'), `---\ngoogle-daily: true\n---\n# Daily work\n\n- [ ] My own task\n\n- [ ] google events <!-- gdn:events -->\n- [ ] recurring <!-- gdn:recurring -->\n- [ ] google tasks <!-- gdn:tasks -->\n\nMy own notes stay here.\n`);
 for (const file of ['manifest.json', 'styles.css']) await cp(file, join(pluginFolder, file));
-await build({ entryPoints: ['tests/obsidian-fixture.ts'], outfile: join(pluginFolder, 'main.js'), bundle: true, platform: 'node', format: 'cjs', target: 'es2022', external: ['obsidian', 'electron', '@codemirror/*', '@lezer/*', ...builtinModules, ...builtinModules.map(name => `node:${name}`)] });
+await build({ entryPoints: ['tests/obsidian-fixture.ts'], outfile: join(pluginFolder, 'main.js'), bundle: true, platform: 'node', format: 'cjs', target: 'es2022', supported: { 'dynamic-import': false }, external: ['obsidian', 'electron', '@codemirror/*', '@lezer/*', ...builtinModules, ...builtinModules.map(name => `node:${name}`)] });
 
 console.log(`Isolated test vault: ${vault}`);
 let application;
@@ -477,6 +478,7 @@ try {
     settingsPage ??= page;
     await settingsPage.getByText('Desktop OAuth client ID', { exact: true }).waitFor();
     await settingsPage.screenshot({ path: 'output/playwright/settings.png' });
+    await runSettingsChecks(settingsPage, page);
     if (settingsPage !== page) await settingsPage.close();
     else await page.evaluate(() => window.app.setting.close());
     await page.setViewportSize({ width: 1000, height: 900 });

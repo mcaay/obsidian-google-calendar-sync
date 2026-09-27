@@ -1,5 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
-import type { SecretStorage } from 'obsidian';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('obsidian', () => ({ Platform: { isDesktop: true } }));
+
+import { Platform, type SecretStorage } from 'obsidian';
 import { CLIENT_SECRET_KEY, GoogleAuth, ReconnectNeeded } from '../src/auth';
 import { encryptConnection } from '../src/connection-transfer';
 
@@ -11,11 +14,13 @@ function setup(expires: number) {
 }
 
 describe('OAuth token management', () => {
+    afterEach(() => { Platform.isDesktop = true; });
     it('imports a synced connection into local secrets and refreshes directly on mobile', async () => {
+        Platform.isDesktop = false;
         const values = new Map<string, string>();
         const secrets = { getSecret: (key: string) => values.get(key) ?? null, setSecret: (key: string, value: string) => values.set(key, value) } as unknown as SecretStorage;
         const transport = vi.fn(async () => ({ status: 200, json: { access_token: 'mobile-access', expires_in: 3600 } }));
-        const auth = new GoogleAuth(secrets, () => 'test.apps.googleusercontent.com', transport, async () => undefined, true);
+        const auth = new GoogleAuth(secrets, () => 'test.apps.googleusercontent.com', transport, async () => undefined);
         const { transfer, code } = await encryptConnection({ clientId: 'test.apps.googleusercontent.com', clientSecret: 'secret', refresh: 'refresh' });
         await auth.importConnection(transfer, code);
         expect(auth.connected()).toBe(true);

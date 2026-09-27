@@ -8,6 +8,9 @@ const options = {
     format: 'cjs',
     target: 'es2022',
     platform: 'browser',
+    // Obsidian resolves import() with Chromium's module loader, which has no
+    // node: modules. Emit require() so desktop sign-in can load node:http.
+    supported: { 'dynamic-import': false },
     outfile: 'main.js',
     sourcemap: production ? false : 'inline',
     minify: production,

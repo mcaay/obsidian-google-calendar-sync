@@ -50,15 +50,15 @@ export default class GoogleDailyNotes extends Plugin {
                 return { status: result.status, json, headers: result.headers };
             });
             response.catch(() => undefined);
-            let timer: ReturnType<typeof setTimeout> | undefined;
+            let timer: number | undefined;
             try {
                 return await Promise.race([
                     response,
-                    new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(new RequestTimeout(response)), 30000); }),
+                    new Promise<never>((_resolve, reject) => { timer = window.setTimeout(() => reject(new RequestTimeout(response)), 30000); }),
                 ]);
-            } finally { if (timer) clearTimeout(timer); }
+            } finally { if (timer) window.clearTimeout(timer); }
         };
-        this.auth = new GoogleAuth(this.app.secretStorage, () => this.data.settings.clientId, transport, async url => { window.open(url, '_external'); }, Platform.isMobile);
+        this.auth = new GoogleAuth(this.app.secretStorage, () => this.data.settings.clientId, transport, async url => { window.open(url, '_external'); });
         this.google = new GoogleClient(transport, force => this.auth.token(force));
         this.controller = new Controller(this, this.data, this.google, scope => this.saveLocal(scope), this.auth);
         const engine = this.controller.engine;

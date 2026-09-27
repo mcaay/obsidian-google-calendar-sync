@@ -13,7 +13,7 @@ type Runtime = {
 let bundle = '';
 
 beforeAll(async () => {
-    const bundled = await build({ entryPoints: ['src/main.ts'], bundle: true, write: false, format: 'cjs', platform: 'browser',
+    const bundled = await build({ entryPoints: ['src/main.ts'], bundle: true, write: false, format: 'cjs', platform: 'browser', supported: { 'dynamic-import': false },
         external: ['obsidian', 'node:http', '@codemirror/*', '@lezer/*'], target: 'es2022' });
     bundle = bundled.outputFiles[0]!.text;
 });
@@ -46,10 +46,10 @@ function load(store: (key: string, value: unknown) => void, local = new Map<stri
     runInNewContext(bundle, {
         module: runtimeModule, exports: runtimeModule.exports,
         crypto, TextEncoder, TextDecoder, btoa, atob, structuredClone, URL, URLSearchParams, setTimeout, clearTimeout,
-        window: {}, document: {},
+        window: { setTimeout, clearTimeout }, document: {},
         require: (id: string) => {
             if (id === 'obsidian') {
-                return { Plugin, PluginSettingTab: class {}, Platform: { isMobile: true }, setTooltip: (_el: unknown, text: string) => tooltips.push(text), Notice: class { constructor(message: string) { notices.push(message); } }, MarkdownView: class {}, TFile: class {} };
+                return { Plugin, PluginSettingTab: class {}, Platform: { isMobile: true, isDesktop: false }, setTooltip: (_el: unknown, text: string) => tooltips.push(text), Notice: class { constructor(message: string) { notices.push(message); } }, MarkdownView: class {}, TFile: class {} };
             }
             if (id.startsWith('@codemirror/') || id.startsWith('@lezer/')) return require(id) as unknown;
             throw new Error(`Unavailable on mobile: ${id}`);

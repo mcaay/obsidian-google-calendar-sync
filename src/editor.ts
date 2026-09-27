@@ -475,7 +475,7 @@ export function editorExtension(hooks: EditorHooks): Extension {
             private cm?: VimAdapter;
             private scope?: Scope | null;
             private toggleHandler?: KeymapEventHandler;
-            private bindTimer: ReturnType<typeof setTimeout>;
+            private bindTimer: number;
             private modeChanged = (mode: { mode: string }) => {
                 const path = context(this.view);
                 if (path && mode.mode === 'normal') queueMicrotask(() => hooks.normal(path));
@@ -495,7 +495,7 @@ export function editorExtension(hooks: EditorHooks): Extension {
                 // Vim itself registers at highest CM precedence. DOM capture must
                 // run before it so a blocked o does not still enter insert mode.
                 view.dom.ownerDocument.defaultView?.addEventListener('keydown', this.keydown, true);
-                this.bindTimer = setTimeout(() => this.bind(), 0);
+                this.bindTimer = window.setTimeout(() => this.bind(), 0);
             }
 
             private bind(): void {
@@ -567,7 +567,7 @@ export function editorExtension(hooks: EditorHooks): Extension {
             }
 
             destroy(): void {
-                clearTimeout(this.bindTimer);
+                window.clearTimeout(this.bindTimer);
                 if (this.toggleHandler) this.scope?.unregister(this.toggleHandler);
                 this.cm?.off('vim-mode-change', this.modeChanged);
                 this.view.dom.ownerDocument.defaultView?.removeEventListener('keydown', this.keydown, true);

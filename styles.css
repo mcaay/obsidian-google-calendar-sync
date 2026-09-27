@@ -5,10 +5,6 @@
     white-space: nowrap;
 }
 
-.gdn-connection-status {
-    color: var(--text-muted);
-}
-
 /* Hide only our internal properties. Other note properties remain available;
    Source mode still exposes the original frontmatter and row comments. */
 :is(.markdown-source-view.is-live-preview, .markdown-reading-view) .metadata-property:is([data-property-key="google-daily"], [data-property-key="google-daily-date"]) {

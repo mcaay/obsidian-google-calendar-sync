@@ -122,8 +122,9 @@ export function parseItemKey(key: string): { kind: Kind; source: string; id: str
     if (key.startsWith('new:')) return undefined;
     try {
         const value = JSON.parse(new TextDecoder().decode(fromBase64url(key))) as unknown;
-        if (Array.isArray(value) && (value[0] === 'event' || value[0] === 'task') && typeof value[1] === 'string' && typeof value[2] === 'string') {
-            return { kind: value[0], source: value[1], id: value[2] };
+        if (Array.isArray(value)) {
+            const [kind, source, id] = value as unknown[];
+            if ((kind === 'event' || kind === 'task') && typeof source === 'string' && typeof id === 'string') return { kind, source, id };
         }
     } catch { /* Not an item key. */ }
     return undefined;

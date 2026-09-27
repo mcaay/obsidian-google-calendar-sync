@@ -31,7 +31,7 @@ export class Controller {
     private status: HTMLElement;
     private tracked = new Set<string>();
     private disposed = false;
-    private deletionTimer?: ReturnType<typeof setTimeout>;
+    private deletionTimer?: number;
     private shown = new Set<string>();
     private clicks = new Map<string, { at: number; before: string }>();
 
@@ -167,9 +167,9 @@ export class Controller {
         this.plugin.registerDomEvent(document, 'click', click, true);
         this.plugin.registerEvent(this.app.workspace.on('window-open', (_window, win) => this.plugin.registerDomEvent(win.document, 'click', click, true)));
         this.plugin.registerEvent(this.app.vault.on('modify', file => {
-            const mark = file instanceof TFile ? this.clicks.get(file.path) : undefined;
-            if (!mark || Date.now() - mark.at > 1000) return;
-            void this.app.vault.cachedRead(file as TFile).then(text => this.flip(file.path, mark.before, text));
+            const mark = this.clicks.get(file.path);
+            if (!(file instanceof TFile) || !mark || Date.now() - mark.at > 1000) return;
+            void this.app.vault.cachedRead(file).then(text => this.flip(file.path, mark.before, text));
         }));
         // Metadata may appear after file creation when a daily-note template is applied.
         this.plugin.registerEvent(this.app.metadataCache.on('changed', (file, text) => {
@@ -228,7 +228,7 @@ export class Controller {
     }
 
     private scheduleDeletions(): void {
-        if (this.deletionTimer) clearTimeout(this.deletionTimer);
+        if (this.deletionTimer) window.clearTimeout(this.deletionTimer);
         if (this.disposed) return;
         const now = Date.now();
         const pending = Object.values(this.data.outbox).filter(operation => operation.remove);
@@ -236,7 +236,7 @@ export class Controller {
         for (const path of new Set(due.map(operation => operation.path))) this.scheduler.request(path, 'delete', false);
         const deadlines = pending.filter(operation => (operation.removeAfter ?? 0) > now).map(operation => operation.removeAfter!);
         if (!deadlines.length) return;
-        this.deletionTimer = setTimeout(() => this.scheduleDeletions(), Math.max(0, Math.min(...deadlines) - now));
+        this.deletionTimer = window.setTimeout(() => this.scheduleDeletions(), Math.max(0, Math.min(...deadlines) - now));
     }
 
     async insertTemplate(editor: Editor, file: TFile): Promise<void> {
@@ -265,5 +265,5 @@ export class Controller {
         this.reconnect();
     }
 
-    dispose(): void { this.disposed = true; clearTimeout(this.deletionTimer); this.engine.stopped = true; this.scheduler.dispose(); }
+    dispose(): void { this.disposed = true; window.clearTimeout(this.deletionTimer); this.engine.stopped = true; this.scheduler.dispose(); }
 }

@@ -1,8 +1,10 @@
-import type { Server } from 'node:http';
 import { base64url } from './encoding';
 import { encryptConnection, decryptConnection, type ConnectionTransfer } from './connection-transfer';
-import type { SecretStorage } from 'obsidian';
+import { Platform, type SecretStorage } from 'obsidian';
 import type { Transport } from './http';
+
+// Not `import type`: Obsidian's review flags every static Node import, even type-only ones.
+type Server = import('node:http').Server;
 
 const AUTH_KEY = 'google-daily-notes-oauth';
 export const CLIENT_SECRET_KEY = 'google-daily-notes-client-secret';
@@ -26,7 +28,7 @@ export class GoogleAuth {
     private generation = 0;
     private dead = false;
 
-    constructor(private secrets: SecretStorage, private clientId: () => string, private transport: Transport, private openBrowser: (url: string) => Promise<void>, private mobile = false) {}
+    constructor(private secrets: SecretStorage, private clientId: () => string, private transport: Transport, private openBrowser: (url: string) => Promise<void>) {}
 
     connected(): boolean { return Boolean(this.read()?.refresh) && !this.dead; }
 
@@ -87,7 +89,8 @@ export class GoogleAuth {
     }
 
     async connect(openBrowser = this.openBrowser): Promise<void> {
-        if (this.mobile) throw new Error('Use the setup code from your connected computer.');
+        // Keep this guard first: Obsidian's review accepts the Node import below only behind it.
+        if (!Platform.isDesktop) throw new Error('Use the setup code from your connected computer.');
         if (!this.clientId().endsWith('.apps.googleusercontent.com')) throw new Error('Enter your Google desktop OAuth client ID first.');
         // A new attempt replaces one still waiting for the browser.
         if (this.server) this.dispose();
@@ -107,9 +110,9 @@ export class GoogleAuth {
             if (!address || typeof address === 'string') throw new Error('Could not start the local Google sign-in callback.');
             const redirect = `http://127.0.0.1:${address.port}/callback`;
             const code = await new Promise<string>((resolve, reject) => {
-                const timeout = setTimeout(() => reject(new Error('Google sign-in timed out. Connect again in settings.')), 30 * 60 * 1000);
+                const timeout = window.setTimeout(() => reject(new Error('Google sign-in timed out. Connect again in settings.')), 30 * 60 * 1000);
                 const finish = (error?: Error, value?: string) => {
-                    clearTimeout(timeout);
+                    window.clearTimeout(timeout);
                     if (error) reject(error); else resolve(value!);
                 };
                 this.abort = () => finish(new Error('Google sign-in cancelled.'));
