@@ -6,31 +6,45 @@ import type { Transport } from './http';
 
 const AUTH_KEY = 'google-daily-notes-oauth';
 export const CLIENT_SECRET_KEY = 'google-daily-notes-client-secret';
-const SCOPES = [
-    'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
-    'https://www.googleapis.com/auth/calendar.events',
-    'https://www.googleapis.com/auth/tasks',
-];
+const SCOPES: Record<string, string> = {
+    'https://www.googleapis.com/auth/calendar.calendarlist.readonly': 'your calendar list',
+    'https://www.googleapis.com/auth/calendar.events': 'calendar events',
+    'https://www.googleapis.com/auth/tasks': 'Google Tasks',
+};
 
 interface Tokens { clientId: string; access: string; refresh: string; expires: number }
+
+// Google revoked the refresh token or it expired. Retrying cannot help.
+export class ReconnectNeeded extends Error {
+    constructor() { super('Google access expired or was revoked. Reconnect in Calendar Sync settings.'); }
+}
 
 export class GoogleAuth {
     private server?: Server;
     private abort?: () => void;
     private refreshing?: Promise<string>;
     private generation = 0;
+    private dead = false;
 
     constructor(private secrets: SecretStorage, private clientId: () => string, private transport: Transport, private openBrowser: (url: string) => Promise<void>, private mobile = false) {}
 
-    connected(): boolean { return Boolean(this.read()?.refresh); }
+    connected(): boolean { return Boolean(this.read()?.refresh) && !this.dead; }
+
+    needsReconnect(): boolean { return this.dead && Boolean(this.read()?.refresh); }
 
     private read(): Tokens | undefined {
-        const raw = this.secrets.getSecret(AUTH_KEY);
+        let raw: string | null;
+        try { raw = this.secrets.getSecret(AUTH_KEY); } catch { return undefined; }
         if (!raw) return undefined;
         try {
             const tokens = JSON.parse(raw) as Tokens;
             return tokens.clientId === this.clientId() ? tokens : undefined;
         } catch { return undefined; }
+    }
+
+    private store(key: string, value: string): void {
+        try { this.secrets.setSecret(key, value); }
+        catch (error) { throw new Error(`Obsidian could not store the Google connection securely: ${error instanceof Error ? error.message : String(error)}`, { cause: error }); }
     }
 
     private async exchange(values: Record<string, string>): Promise<Tokens> {
@@ -41,18 +55,32 @@ export class GoogleAuth {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({ ...values, client_id: this.clientId(), client_secret: this.secrets.getSecret(CLIENT_SECRET_KEY) ?? '' }).toString(),
         });
-        if (response.status !== 200) throw new Error('Google sign-in failed. Check the desktop OAuth client or reconnect in settings.');
+        if (response.status !== 200) {
+            // 2.6: a revoked or expired refresh token stays dead until reconnect.
+            if (values.grant_type === 'refresh_token' && (response.json as { error?: string } | undefined)?.error === 'invalid_grant' && generation === this.generation) {
+                this.dead = true;
+                throw new ReconnectNeeded();
+            }
+            throw new Error('Google sign-in failed. Check the desktop OAuth client or reconnect in settings.');
+        }
         if (generation !== this.generation || clientId !== this.clientId()) throw new Error('Google connection changed while signing in.');
-        const body = response.json as { access_token: string; refresh_token?: string; expires_in: number };
+        const body = response.json as { access_token: string; refresh_token?: string; expires_in: number; scope?: string };
+        if (values.grant_type === 'authorization_code' && body.scope !== undefined) {
+            const granted = new Set(body.scope.split(' '));
+            const missing = Object.entries(SCOPES).filter(([scope]) => !granted.has(scope)).map(([, name]) => name);
+            if (missing.length) throw new Error(`Google did not grant access to ${missing.join(' and ')}. Connect again and allow all requested access.`);
+        }
         const tokens: Tokens = { clientId: this.clientId(), access: body.access_token, refresh: body.refresh_token ?? this.read()?.refresh ?? '', expires: Date.now() + body.expires_in * 1000 };
         if (!tokens.refresh) throw new Error('Google did not return offline access. Connect again.');
-        this.secrets.setSecret(AUTH_KEY, JSON.stringify(tokens));
+        this.store(AUTH_KEY, JSON.stringify(tokens));
+        this.dead = false;
         return tokens;
     }
 
     async token(force = false): Promise<string> {
         const saved = this.read();
         if (!saved) throw new Error('Connect your Google account in plugin settings.');
+        if (this.dead) throw new ReconnectNeeded();
         if (!force && saved.expires > Date.now() + 60000) return saved.access;
         this.refreshing ??= this.exchange({ grant_type: 'refresh_token', refresh_token: saved.refresh }).then(value => value.access).finally(() => { this.refreshing = undefined; });
         return this.refreshing;
@@ -60,8 +88,9 @@ export class GoogleAuth {
 
     async connect(openBrowser = this.openBrowser): Promise<void> {
         if (this.mobile) throw new Error('Use the setup code from your connected computer.');
-        if (this.server) throw new Error('Google sign-in is already open in your browser.');
         if (!this.clientId().endsWith('.apps.googleusercontent.com')) throw new Error('Enter your Google desktop OAuth client ID first.');
+        // A new attempt replaces one still waiting for the browser.
+        if (this.server) this.dispose();
         const verifier = base64url(crypto.getRandomValues(new Uint8Array(32)));
         const challenge = base64url(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))));
         const state = base64url(crypto.getRandomValues(new Uint8Array(32)));
@@ -97,13 +126,13 @@ export class GoogleAuth {
                 const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
                 url.search = new URLSearchParams({
                     client_id: this.clientId(), redirect_uri: redirect, response_type: 'code',
-                    scope: SCOPES.join(' '), state, access_type: 'offline', prompt: 'consent',
+                    scope: Object.keys(SCOPES).join(' '), state, access_type: 'offline', prompt: 'consent',
                     code_challenge: challenge, code_challenge_method: 'S256',
                 }).toString();
                 void openBrowser(url.toString()).catch(error => finish(error as Error));
             });
             await this.exchange({ code, redirect_uri: redirect, grant_type: 'authorization_code', code_verifier: verifier });
-        } finally { this.dispose(); }
+        } finally { if (this.server === server) this.dispose(); }
     }
 
     async shareConnection(): Promise<{ transfer: ConnectionTransfer; code: string }> {
@@ -127,14 +156,16 @@ export class GoogleAuth {
         if (generation !== this.generation || credentials.clientId !== this.clientId()) throw new Error('Google connection changed while signing in.');
         const body = response.json as { access_token: string; expires_in: number; refresh_token?: string };
         if (!body.access_token || !Number.isFinite(body.expires_in)) throw new Error('Google returned an incomplete connection. Try again.');
-        this.secrets.setSecret(CLIENT_SECRET_KEY, credentials.clientSecret);
-        this.secrets.setSecret(AUTH_KEY, JSON.stringify({ clientId: credentials.clientId, access: body.access_token,
+        this.store(CLIENT_SECRET_KEY, credentials.clientSecret);
+        this.store(AUTH_KEY, JSON.stringify({ clientId: credentials.clientId, access: body.access_token,
             refresh: body.refresh_token ?? credentials.refresh, expires: Date.now() + body.expires_in * 1000 } satisfies Tokens));
+        this.dead = false;
     }
 
     disconnect(): void {
         this.dispose();
-        this.secrets.setSecret(AUTH_KEY, '');
+        this.dead = false;
+        this.store(AUTH_KEY, '');
     }
 
     dispose(): void {

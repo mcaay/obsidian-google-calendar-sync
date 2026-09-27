@@ -21,7 +21,7 @@ Calendar scheduling and recurrence stay in Google. Deleting a synced row in Obsi
 
 You install the plugin in your own Obsidian vault, configure a Google desktop OAuth client, and authorize access through Google. You choose which calendars and task lists appear in your notes.
 
-The plugin runs on your device and communicates directly with Google. It has no hosted synchronization service, telemetry, or advertising. Synced rows and synchronization state are stored in your vault. Credentials use Obsidian's local SecretStorage.
+The plugin runs on your device and communicates directly with Google. It has no hosted synchronization service, telemetry, or advertising. Synced rows are stored in your notes; synchronization state stays in each device's local storage. Credentials use Obsidian's local SecretStorage.
 
 ## Policies and contact
 

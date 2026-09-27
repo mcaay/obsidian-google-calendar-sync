@@ -11,7 +11,7 @@ This policy describes **Calendar Sync by mcaay**, an Obsidian plugin.
 
 ## Google data accessed and used
 
-After you authorize access, the plugin retrieves calendar names, identifiers, and access permissions, and Google Tasks list names and identifiers so you can select sources. For selected sources, it requests event and task records to display scheduled items in daily notes and synchronize edits. It uses event titles, identifiers, start and end dates and times, status, and recurrence instance information, plus task titles, identifiers, due dates, completion status, and notes used to recognize tasks it created. Google API responses can contain additional fields that the plugin does not use or persist.
+After you authorize access, the plugin retrieves calendar names, identifiers, and access permissions, and Google Tasks list names and identifiers so you can select sources. For selected sources, it requests event and task records to display scheduled items in daily notes and synchronize edits. It uses event titles, identifiers, start and end dates and times, status, modification times, and recurrence instance information, plus task titles, identifiers, due dates, completion status, and notes used to recognize tasks it created. It asks Google only for these fields.
 
 The plugin requests these Google permissions:
 
@@ -29,9 +29,9 @@ The plugin does not send other note text, vault filenames, or the contents of yo
 
 ## Local storage and retention
 
-Synced rows are stored in your Markdown notes. The plugin's `data.json` stores source selections and shared settings. Each device keeps item snapshots, note paths, pending requests, and undo state in vault-specific local storage, separate from Obsidian Sync. Older versions stored this state in `data.json`; upgrading migrates the original desktop's pending work before removing runtime state from that file. OAuth tokens and the OAuth client secret are stored through Obsidian SecretStorage, separately from `data.json`. This is Obsidian-managed storage; the plugin does not provide its own encryption of your vault or guarantee that every storage location is encrypted.
+Synced rows are stored in your Markdown notes. The plugin's `data.json` stores source selections and shared settings. Each device keeps item snapshots, note paths, pending requests, undo state, and a list of unchecked marked calendar events from earlier days (titles, times and identifiers) in vault-specific local storage, separate from Obsidian Sync. Older versions stored this state in `data.json`; upgrading migrates the original desktop's pending work before removing runtime state from that file. OAuth tokens and the OAuth client secret are stored through Obsidian SecretStorage, separately from `data.json`. This is Obsidian-managed storage; the plugin does not provide its own encryption of your vault or guarantee that every storage location is encrypted.
 
-Local notes and plugin state remain until you remove them. There is no automatic age-based deletion of stored notes or synchronization state. Your own vault synchronization, backups, publishing settings, other plugins, and device access can affect who can access local files. Those services and settings are outside this plugin's control.
+Your notes remain until you remove them. Pending work stays on the device until it is sent. The plugin removes its other device state when it is no longer needed: undo records after Obsidian restarts, note snapshots after 14 days without a sync, and created task identifiers 14 days after the task's reconciliation tag was removed. Your own vault synchronization, backups, publishing settings, other plugins, and device access can affect who can access local files. Those services and settings are outside this plugin's control.
 
 ## Connecting another device
 
@@ -49,7 +49,7 @@ Calendar Sync by mcaay's use and transfer of information received from Google AP
 
 Select **Disconnect** in the plugin settings to remove locally stored OAuth tokens and stop authenticated synchronization. This does not remove the OAuth client secret, existing Markdown rows, cached synchronization state, pending edits, or data in Google.
 
-To revoke the Google authorization, remove the app from your [Google account connections](https://myaccount.google.com/connections). To remove local copies, disable the plugin, remove its synced Markdown rows and plugin data, and clear its client secret from Obsidian SecretStorage. Remove copies from your backups or other vault storage services if desired. Removing local data while the plugin is disabled does not delete events or tasks from Google. While enabled, explicitly deleting a synced row in Obsidian sends a deletion request to Google.
+To revoke the Google authorization, remove the app from your [Google account connections](https://myaccount.google.com/connections). To remove local copies, disable the plugin, remove its synced Markdown rows and plugin data, clear its device state as described in the [behavior reference](behavior.md#pending-work-on-this-device), and clear its client secret from Obsidian SecretStorage. Remove copies from your backups or other vault storage services if desired. Removing local data while the plugin is disabled does not delete events or tasks from Google. While enabled, explicitly deleting a synced row in Obsidian sends a deletion request to Google.
 
 ## This documentation site and contact
 

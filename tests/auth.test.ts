@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SecretStorage } from 'obsidian';
-import { CLIENT_SECRET_KEY, GoogleAuth } from '../src/auth';
+import { CLIENT_SECRET_KEY, GoogleAuth, ReconnectNeeded } from '../src/auth';
 import { encryptConnection } from '../src/connection-transfer';
 
 function setup(expires: number) {
@@ -33,6 +33,54 @@ describe('OAuth token management', () => {
         await expect(h.auth.importConnection(transfer, code)).rejects.toThrow('settings');
         expect(h.values).toEqual(before);
         expect(h.transport).not.toHaveBeenCalled();
+    });
+    it('stops retrying a revoked refresh token until the user reconnects (2.6)', async () => {
+        const h = setup(0);
+        h.transport.mockResolvedValue({ status: 400, json: { error: 'invalid_grant' } } as never);
+        await expect(h.auth.token()).rejects.toBeInstanceOf(ReconnectNeeded);
+        await expect(h.auth.token()).rejects.toBeInstanceOf(ReconnectNeeded);
+        expect(h.transport).toHaveBeenCalledOnce();
+        expect(h.auth.connected()).toBe(false);
+        expect(h.auth.needsReconnect()).toBe(true);
+    });
+    it('reports scopes the consent screen did not grant (5.3)', async () => {
+        const values = new Map<string, string>();
+        const secrets = { getSecret: (key: string) => values.get(key) ?? null, setSecret: (key: string, value: string) => values.set(key, value) } as unknown as SecretStorage;
+        const transport = vi.fn(async () => ({ status: 200, json: { access_token: 'a', refresh_token: 'r', expires_in: 3600, scope: 'https://www.googleapis.com/auth/calendar.events' } }));
+        const auth = new GoogleAuth(secrets, () => 'test.apps.googleusercontent.com', transport, async () => undefined);
+        try {
+            await expect(auth.connect(async link => {
+                const url = new URL(link);
+                const callback = new URL(url.searchParams.get('redirect_uri')!);
+                callback.search = new URLSearchParams({ code: 'c', state: url.searchParams.get('state')! }).toString();
+                await fetch(callback);
+            })).rejects.toThrow('did not grant access to your calendar list and Google Tasks');
+            expect(auth.connected()).toBe(false);
+        } finally { auth.dispose(); }
+    });
+    it('replaces a sign-in that is still waiting instead of failing (5.3)', async () => {
+        const values = new Map<string, string>();
+        const secrets = { getSecret: (key: string) => values.get(key) ?? null, setSecret: (key: string, value: string) => values.set(key, value) } as unknown as SecretStorage;
+        const transport = vi.fn(async () => ({ status: 200, json: { access_token: 'a', refresh_token: 'r', expires_in: 3600 } }));
+        const auth = new GoogleAuth(secrets, () => 'test.apps.googleusercontent.com', transport, async () => undefined);
+        try {
+            const first = auth.connect(async () => undefined).catch((error: unknown) => error);
+            await new Promise(resolve => setTimeout(resolve, 20));
+            await auth.connect(async link => {
+                const url = new URL(link);
+                const callback = new URL(url.searchParams.get('redirect_uri')!);
+                callback.search = new URLSearchParams({ code: 'c', state: url.searchParams.get('state')! }).toString();
+                await fetch(callback);
+            });
+            expect(String(await first)).toContain('cancelled');
+            expect(auth.connected()).toBe(true);
+        } finally { auth.dispose(); }
+    });
+    it('shows a SecretStorage failure instead of losing the connection silently (5.3)', async () => {
+        const h = setup(0);
+        const secrets = { getSecret: () => JSON.stringify({ clientId: 'client', access: 'a', refresh: 'r', expires: 0 }), setSecret: () => { throw new Error('Keychain locked'); } } as unknown as SecretStorage;
+        const auth = new GoogleAuth(secrets, () => 'client', h.transport, async () => undefined);
+        await expect(auth.token()).rejects.toThrow('Keychain locked');
     });
     it('can authorize in a chosen browser without opening the system browser', async () => {
         const values = new Map<string, string>();

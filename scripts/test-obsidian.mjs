@@ -7,6 +7,7 @@ import { builtinModules } from 'node:module';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { runMobileChecks } from './test-mobile-scenarios.mjs';
+import { runEditorChecks } from './test-editor-scenarios.mjs';
 
 const mobile = process.argv.includes('--mobile');
 
@@ -118,7 +119,11 @@ try {
         }, enabled);
         await page.waitForFunction(enabled => Boolean(window.app.workspace.activeEditor.editor.cm.cm?.state.vim) === enabled, enabled);
     };
-    if (mobile) {
+    if (process.env.GDN_EDITOR_ONLY) {
+        // Development shortcut: only the scenarios in test-editor-scenarios.mjs.
+        await runEditorChecks(page, { editorText, selectRow, setVim });
+        console.log('Editor scenarios passed.');
+    } else if (mobile) {
         await runMobileChecks(page);
         assert.deepEqual(errors, [], 'No mobile renderer exceptions');
         await writeFile('output/playwright/mobile-result.json', JSON.stringify({ passed: true, mode: 'Obsidian mobile UI emulation', vault, errors, hostErrors }, null, 2));
@@ -406,8 +411,8 @@ try {
         const originalItems = window.gdnTest.items;
         controller.scheduler.dispose();
         window.gdnTest.items = [task];
-        plugin.google.load = async (date, _settings, retained) => structuredClone(
-            window.gdnTest.items.filter(item => item.date === date || (item.date < date && (!item.done || retained.includes(item.key)))));
+        plugin.google.load = async (date, _settings, retained) => ({ items: structuredClone(
+            window.gdnTest.items.filter(item => item.date === date || (item.date < date && (!item.done || retained.includes(item.key))))), failed: [] });
         const template = '---\ngoogle-daily: true\n---\n- [ ] google tasks <!-- gdn:tasks -->\n';
         const earlier = await window.app.vault.create('2026-09-23.md', template);
         const later = await window.app.vault.create('2026-09-25.md', template);
@@ -444,8 +449,6 @@ try {
         const result = {
             earlier: await window.app.vault.read(earlier),
             later: await window.app.vault.read(later),
-            earlierRetained: [...plugin.data.notes[earlier.path].retained],
-            laterRetained: [...plugin.data.notes[later.path].retained],
             extraOperations: window.gdnTest.operations.length - operationsBeforeSwitch,
         };
         plugin.google.load = originalLoad;
@@ -457,11 +460,12 @@ try {
         return result;
     }, switchTask);
     assert.equal(switchResult.extraOperations, 0, 'Switching notes cannot send a false completion to Google');
-    assert.deepEqual(switchResult.laterRetained, [], 'A different note cannot acquire a completion retention flag');
     assert.doesNotMatch(switchResult.later, /Completed in the earlier note/);
     assert.match(switchResult.earlier, /\[x\] Completed in the earlier note/);
-    assert.deepEqual(switchResult.earlierRetained, [switchTask.key], 'Keep the task where it was actually completed');
     console.log('PASS: switching notes during a save cannot transfer completions; the original completed entry stays.');
+
+    await runEditorChecks(page, { editorText, selectRow, setVim });
+    await page.evaluate(async () => { await window.app.workspace.getLeaf(false).openFile(window.app.vault.getAbstractFileByPath('2026-09-19.md')); });
 
     await page.evaluate(() => { window.app.setting.open(); window.app.setting.openTabById('google-daily-notes'); });
     let settingsPage;

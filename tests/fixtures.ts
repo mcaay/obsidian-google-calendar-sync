@@ -21,9 +21,15 @@ export function event(values: Partial<Item> = {}): Item {
 
 export function seeded(items: Item[]): { data: PluginData; text: string } {
     const data = initialData();
+    data.runtimeOwner = 'device';
     data.settings.timeZone = 'Europe/Warsaw';
     data.settings.defaultTaskList = 'list';
     data.settings.taskLists = [{ id: 'list', name: 'Tasks', enabled: true }];
-    data.notes[PATH] = { rows: Object.fromEntries(items.map(value => [value.key, structuredClone(value)])), retained: [] };
+    data.notes[PATH] = { rows: Object.fromEntries(items.map(value => [value.key, structuredClone(value)])) };
     return { data, text: renderNote(EMPTY, items) };
+}
+
+// A task row typed under the tasks heading, with the owned key the editor adds.
+export function withDraft(text: string, title: string, key = 'new:device:1', done = false): string {
+    return text.replace('<!-- gdn:tasks -->\n', `<!-- gdn:tasks -->\n    - [${done ? 'x' : ' '}] ${title} <!-- gdn:${key} -->\n`);
 }

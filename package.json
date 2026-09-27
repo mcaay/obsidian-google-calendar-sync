@@ -6,7 +6,7 @@
     "scripts": {
         "dev": "node esbuild.config.mjs",
         "build": "npm run typecheck && node esbuild.config.mjs production",
-        "typecheck": "tsc --noEmit",
+        "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.src.json",
         "lint": "eslint src tests",
         "test": "vitest run",
         "test:obsidian": "node scripts/test-obsidian.mjs",
@@ -15,6 +15,7 @@
         "test:mobile": "node scripts/test-obsidian.mjs --mobile"
     },
     "devDependencies": {
+        "@codemirror/commands": "6.10.0",
         "@codemirror/state": "^6.5.0",
         "@codemirror/view": "^6.38.6",
         "@eslint/js": "^10.0.1",

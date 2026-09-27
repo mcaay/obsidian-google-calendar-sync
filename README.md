@@ -16,7 +16,7 @@ Video walkthrough - **first 6 minutes is a TLDR section**, then I'm rambling for
 
 ## Install
 
-Requires Obsidian 1.11.4+. The published release is v0.8.2 (desktop). The unreleased v0.9.0 build adds experimental iOS and Android support alongside macOS, Windows and Linux. [Build locally](docs/development.md), then [connect your phone through Obsidian Sync](docs/setup.md#connect-another-device).
+Requires Obsidian 1.11.4+. The published release is v0.8.2 (desktop). The unreleased v0.9.0 build adds iPhone support (verified on a physical iPhone; Android is untested) alongside macOS, Windows and Linux. [Build locally](docs/development.md), then [connect your phone through Obsidian Sync](docs/setup.md#connect-another-device).
 
 1. [Download the published desktop plugin](https://github.com/mcaay/obsidian-google-calendar-sync/releases/download/0.8.2/google-daily-notes.zip), unzip it into `<Vault>/.obsidian/plugins/`, then enable **Calendar Sync by mcaay** in **Settings → Community plugins**.
 2. [Connect Google](https://github.com/mcaay/obsidian-google-calendar-sync/blob/main/docs/setup.md). You currently need your own Google Cloud OAuth client; the guide covers setup and choosing calendars and task lists.

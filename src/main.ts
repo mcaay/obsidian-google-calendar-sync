@@ -1,22 +1,29 @@
-import { Platform, Plugin, requestUrl } from 'obsidian';
+import { Notice, Platform, Plugin, requestUrl } from 'obsidian';
 import { GoogleAuth } from './auth';
 import { GoogleClient } from './google';
 import { Controller } from './controller';
 import { editorExtension } from './editor';
 import { GoogleSettingsTab } from './settings';
 import { initialData, type PluginData } from './types';
-import { DEVICE_STATE_KEY, deviceSnapshot, restoreDeviceState, sharedSnapshot } from './device-state';
-import type { Transport } from './http';
+import { DEVICE_STATE_KEY, deviceSnapshot, JOURNAL_KEY, journalSnapshot, restoreDeviceState, sharedSnapshot, type DeviceSnapshot, type JournalSnapshot } from './device-state';
+import { RequestTimeout, type HttpResponse, type Transport } from './http';
+import type { SaveScope } from './sync';
+
+const SESSION_KEY = 'google-daily-notes-session';
 
 /**
  * How to read this code:
- * 1. onload() restores settings and the outbox, then wires GoogleAuth (auth.ts)
- *    and GoogleClient (google.ts) to Controller (controller.ts).
+ * 1. onload() restores settings, this device's state and its journal
+ *    (device-state.ts), then wires GoogleAuth (auth.ts) and GoogleClient
+ *    (google.ts) to Controller (controller.ts).
  * 2. Controller.start() registers note events and starts SyncScheduler (scheduler.ts).
- * 3. editorExtension() (editor.ts) observes native Markdown edits; SyncEngine.run()
+ * 3. editorExtension() (editor.ts) journals native Markdown edits; SyncEngine.run()
  *    (sync.ts) reconciles them with Google and writes managed regions back safely.
+ * 4. saveLocal() writes the journal or all device state and reads it back.
+ *    Obsidian's storage helper ignores write errors, so a failed read-back is
+ *    the only signal; SyncEngine then sends nothing (1.7).
  * Ordinary: opening an enabled daily note starts a sync without a button.
- * Tricky: an offline title edit stays in the outbox and is retried after restart.
+ * Tricky: an offline title edit stays in the journal and is retried after restart.
  */
 export default class GoogleDailyNotes extends Plugin {
     data!: PluginData;
@@ -29,47 +36,85 @@ export default class GoogleDailyNotes extends Plugin {
     async onload(): Promise<void> {
         const stored = await this.loadData() as Partial<PluginData> | null;
         this.sharedJSON = JSON.stringify(stored);
-        this.data = restoreDeviceState(stored, this.app.loadLocalStorage(DEVICE_STATE_KEY) as ReturnType<typeof deviceSnapshot> | null, Platform.isMobile);
-        this.app.saveLocalStorage(DEVICE_STATE_KEY, deviceSnapshot(this.data));
+        const restored = restoreDeviceState(stored,
+            this.app.loadLocalStorage(DEVICE_STATE_KEY) as Partial<DeviceSnapshot & PluginData> | null,
+            this.app.loadLocalStorage(JOURNAL_KEY) as Partial<JournalSnapshot> | null, Platform.isMobile);
+        this.data = restored.data;
+        if (restored.dropped.length) new Notice(`Calendar Sync could not upgrade ${restored.dropped.join(', ')} and removed it.`);
+        this.saveLocal('all');
         const transport: Transport = async request => {
+            const response: Promise<HttpResponse> = requestUrl({ ...request, throw: false }).then(result => {
+                let json: unknown;
+                // Error pages can be HTML. Keep the status either way.
+                try { json = result.text ? JSON.parse(result.text) as unknown : {}; } catch { json = undefined; }
+                return { status: result.status, json, headers: result.headers };
+            });
+            response.catch(() => undefined);
             let timer: ReturnType<typeof setTimeout> | undefined;
             try {
-                const response = await Promise.race([
-                    requestUrl({ ...request, throw: false }),
-                    new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(new Error('Google request timed out. Pending edits are kept.')), 30000); }),
+                return await Promise.race([
+                    response,
+                    new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(new RequestTimeout(response)), 30000); }),
                 ]);
-                return { status: response.status, json: response.text ? response.json as unknown : {} };
             } finally { if (timer) clearTimeout(timer); }
         };
         this.auth = new GoogleAuth(this.app.secretStorage, () => this.data.settings.clientId, transport, async url => { window.open(url, '_external'); }, Platform.isMobile);
         this.google = new GoogleClient(transport, force => this.auth.token(force));
-        this.controller = new Controller(this, this.data, this.google, () => this.persist(), () => this.auth.connected());
+        this.controller = new Controller(this, this.data, this.google, scope => this.saveLocal(scope), this.auth);
+        const engine = this.controller.engine;
         this.registerEditorExtension(editorExtension({
-            rows: path => this.controller.engine.editorRows(path),
+            rows: path => engine.editorRows(path),
             indent: () => this.controller.indent(),
+            tabWidth: () => this.controller.tabWidth(),
+            draftKey: () => engine.draftKey(),
+            resolve: key => engine.resolve(key),
             changed: (path, vim, toggled) => this.controller.scheduler.changed(path, vim, toggled),
             normal: path => this.controller.scheduler.normal(path),
-            deleted: (path, keys) => this.controller.queueDeletions(path, keys),
-            undoableDeletions: (path, at) => this.controller.engine.undoableDeletions(path, at),
+            edited: (path, edits) => engine.journalEdits(path, edits),
+            deleted: (path, rows) => this.controller.queueDeletions(path, rows),
             restored: (path, keys, at) => this.controller.restoreDeletions(path, keys, at),
+            external: (path, before, after) => this.controller.external(path, before, after),
+            blocked: message => new Notice(message),
         }));
         this.addSettingTab(new GoogleSettingsTab(this.app, this));
         this.addCommand({
             id: 'insert-daily-sections', name: 'Insert Google daily sections',
             editorCallback: (editor, context) => {
-                if (context.file) void this.controller.insertTemplate(editor, context.file).catch(error => this.controller.setStatus(String(error)));
+                if (context.file) void this.controller.insertTemplate(editor, context.file).catch(error => new Notice(error instanceof Error ? error.message : String(error)));
             },
         });
-        this.app.workspace.onLayoutReady(() => this.controller.start());
+        // sessionStorage survives plugin reloads but not an app restart.
+        let restarted = false;
+        try {
+            restarted = !sessionStorage.getItem(SESSION_KEY);
+            sessionStorage.setItem(SESSION_KEY, '1');
+        } catch { /* Without it, nothing tied to undo history is pruned. */ }
+        this.app.workspace.onLayoutReady(() => this.controller.start(restarted));
         this.registerDomEvent(document, 'visibilitychange', () => {
             if (Platform.isMobile && document.visibilityState === 'visible') this.controller.resume();
         });
         this.registerDomEvent(window, 'online', () => this.controller.resume());
-        this.register(() => { this.controller.dispose(); this.auth.dispose(); });
+        this.register(() => { this.saveLocal('all'); this.controller.dispose(); this.auth.dispose(); });
+        // An expired setup package can no longer be imported.
+        if (this.data.connectionTransfer && this.data.connectionTransfer.expires <= Date.now()) {
+            delete this.data.connectionTransfer;
+            await this.persist();
+        }
+    }
+
+    // Returns false when the stored copy does not match what was written.
+    saveLocal(scope: SaveScope): boolean {
+        const write = (key: string, value: unknown) => {
+            const serialized = JSON.stringify(value);
+            this.app.saveLocalStorage(key, value);
+            return JSON.stringify(this.app.loadLocalStorage(key)) === serialized;
+        };
+        const journal = write(JOURNAL_KEY, journalSnapshot(this.data));
+        return (scope === 'journal' || write(DEVICE_STATE_KEY, deviceSnapshot(this.data))) && journal;
     }
 
     async persist(): Promise<void> {
-        this.app.saveLocalStorage(DEVICE_STATE_KEY, deviceSnapshot(this.data));
+        this.saveLocal('all');
         const snapshot = sharedSnapshot(this.data);
         const serialized = JSON.stringify(snapshot);
         if (serialized === this.sharedJSON) return this.saving;

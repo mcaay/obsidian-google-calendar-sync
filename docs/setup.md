@@ -51,7 +51,7 @@ google-daily-date: 2026-09-19
 
 Use your template system's date substitution to populate that property. The plugin never substitutes today's date for an older daily note.
 
-Place each marked parent row wherever you want. Its indented child rows form that group; the next nonblank row at the parent level ends it. Parent checkbox labels are yours to rename, for example `cykliczne`. You may omit groups you do not need. Each group may appear only once. The plugin preserves content outside the groups and unlinked text inside them. Generated rows follow Obsidian's **Indent using tabs** and **Indent visual width** settings.
+Place each marked parent row wherever you want. Its indented child rows form that group; the next nonblank row at the parent level ends it. Parent checkbox labels are yours to rename, for example `cykliczne`. You may omit groups you do not need. Each group may appear only once. The plugin preserves content outside the groups. Inside the Google Tasks group, only `- [ ]` and `- [x]` rows directly under the heading become Google Tasks; plain text, other bullets, nested lines and code blocks stay local and untouched. Generated rows follow Obsidian's **Indent using tabs** and **Indent visual width** settings.
 
 The generated rows look like this in Live Preview:
 
@@ -66,4 +66,4 @@ The generated rows look like this in Live Preview:
     - [ ] 📅 12:00 Call Sam
 ```
 
-Each synced row also contains an HTML comment identifying the Google item. Live Preview hides that comment and keeps the cursor out of it. The plugin also hides its own properties by default; other properties stay visible. Source mode exposes the comments and frontmatter. It remains present in the Markdown file, so renaming a row cannot lose its identity. Keep the section markers and row comments intact when editing outside Obsidian.
+Each synced row also contains an HTML comment identifying the Google item. Live Preview hides that comment and keeps the cursor out of it. The plugin also hides its own properties by default; other properties stay visible. Source mode exposes the comments and frontmatter. It remains present in the Markdown file, so renaming a row cannot lose its identity. Keep the section markers and row comments intact when editing outside Obsidian. Edits to synced rows made outside Obsidian's editor are not sent to Google; the next sync shows Google's values again.

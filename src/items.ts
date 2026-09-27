@@ -1,21 +1,22 @@
 import { cleanTitle, itemKey } from './markdown';
-import { dayBounds, inZone } from './dates';
+import { inZone } from './dates';
 import type { CalendarChoice, CalendarEvent, GoogleTask, Item, Settings } from './types';
 
+export const MARKER = /\[google-daily-notes:([A-Za-z0-9_:-]+)\]/;
+
 export function eventMarker(summary: string): { title: string; done?: boolean } {
-    const match = /^(⬜\uFE0F?|✅\uFE0F?)\s*/u.exec(summary);
+    const match = /^(⬜️?|✅️?)\s*/u.exec(summary);
     return match ? { title: summary.slice(match[0].length), done: match[1]!.startsWith('✅') } : { title: summary };
 }
 
-export function eventItem(event: CalendarEvent, calendar: CalendarChoice, date: string, settings: Settings, retained: string[]): Item | undefined {
+export function eventItem(event: CalendarEvent, calendar: CalendarChoice, date: string, bounds: { start: string; end: string }, settings: Settings, retained: string[]): Item | undefined {
     if (event.status === 'cancelled') return undefined;
     const start = event.start.dateTime;
     const zoned = start ? inZone(start, settings.timeZone) : undefined;
     const startDate = event.start.date ?? zoned?.date;
     if (!startDate) return undefined;
-    const { start: dayStart, end: dayEnd } = dayBounds(date, settings.timeZone);
     const occurs = start
-        ? Date.parse(start) < Date.parse(dayEnd) && Date.parse(event.end.dateTime ?? start) > Date.parse(dayStart)
+        ? Date.parse(start) < Date.parse(bounds.end) && Date.parse(event.end.dateTime ?? start) > Date.parse(bounds.start)
         : startDate <= date && (event.end.date ?? startDate) > date;
     const marked = settings.markers ? eventMarker(event.summary ?? '(Untitled event)') : { title: event.summary ?? '(Untitled event)', done: undefined };
     const key = itemKey('event', calendar.id, event.id);
@@ -41,9 +42,11 @@ export function taskItem(task: GoogleTask, source: string, date: string, setting
     const done = task.status === 'completed';
     const key = itemKey('task', source, task.id);
     if (due !== date && !(due < date && ((!done && settings.overdueTasks) || retained.includes(key)))) return undefined;
+    const marker = MARKER.exec(task.notes ?? '')?.[1];
     return {
         key, kind: 'task', source, id: task.id, section: 'tasks',
         title: cleanTitle(task.title ?? ''), done, prefix: '', date: due,
         writable: true, sort: `${due} ${/^📅 (\d{2}:\d{2})\s/.exec(task.title ?? '')?.[1] ?? '99:99'} ${task.title ?? ''}`,
+        ...(marker ? { marker } : {}),
     };
 }

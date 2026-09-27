@@ -1,5 +1,6 @@
 import { Platform, PluginSettingTab, Setting, type App, type ButtonComponent } from 'obsidian';
 import { CLIENT_SECRET_KEY } from './auth';
+import { MAX_INTERVAL, MIN_INTERVAL } from './scheduler';
 import type GoogleDailyNotes from './main';
 import { deviceConnectionSettings } from './device-connection-settings';
 
@@ -15,15 +16,26 @@ export class GoogleSettingsTab extends PluginSettingTab {
         if (!Platform.isMobile) {
             root.createEl('p', { text: 'Connect your own Google desktop OAuth client. Calendar titles and task edits go directly to Google. Other note content stays in your vault.' });
             root.createEl('a', { text: 'OAuth setup guide', href: 'https://developers.google.com/identity/protocols/oauth2/native-app' });
-            new Setting(root).setName('Desktop OAuth client ID').addText(text => text.setPlaceholder('...apps.googleusercontent.com').setValue(settings.clientId).onChange(async value => {
-                settings.clientId = value.trim(); await plugin.persist();
-            }));
+            // Saved when the field is left, so Sync does not carry every keystroke.
+            new Setting(root).setName('Desktop OAuth client ID').addText(text => {
+                text.setPlaceholder('...apps.googleusercontent.com').setValue(settings.clientId);
+                text.inputEl.addEventListener('change', () => {
+                    settings.clientId = text.getValue().trim();
+                    void plugin.persist();
+                });
+            });
             new Setting(root).setName('Desktop OAuth client secret').setDesc('Stored in Obsidian SecretStorage, outside plugin data.json.').addText(text => {
                 text.inputEl.type = 'password';
-                text.setValue(this.app.secretStorage.getSecret(CLIENT_SECRET_KEY) ?? '').onChange(value => this.app.secretStorage.setSecret(CLIENT_SECRET_KEY, value.trim()));
+                let saved = '';
+                try { saved = this.app.secretStorage.getSecret(CLIENT_SECRET_KEY) ?? ''; } catch { /* Shown on change. */ }
+                text.setValue(saved);
+                text.inputEl.addEventListener('change', () => {
+                    try { this.app.secretStorage.setSecret(CLIENT_SECRET_KEY, text.getValue().trim()); }
+                    catch (error) { message.setText(`Obsidian could not store the client secret securely: ${error instanceof Error ? error.message : String(error)}`); }
+                });
             });
         }
-        const message = root.createEl('p', { cls: 'gdn-connection-status', text: plugin.auth.connected() ? 'Connected' : 'Not connected' });
+        const message = root.createEl('p', { cls: 'gdn-connection-status', text: plugin.auth.connected() ? 'Connected' : plugin.auth.needsReconnect() ? 'Reconnect needed' : 'Not connected' });
         if (!Platform.isMobile) {
             const connection = new Setting(root).setName('Connection');
             let linkInput!: HTMLInputElement;
@@ -33,7 +45,9 @@ export class GoogleSettingsTab extends PluginSettingTab {
                 linkInput.setAttribute('aria-label', 'Google sign-in link');
             });
             linkSetting.settingEl.hide();
+            let attempt = 0;
             const connect = async (button: ButtonComponent, chooseBrowser = false) => {
+                const current = ++attempt;
                 button.setDisabled(true); message.setText('Continue in your browser.');
                 try {
                     await plugin.auth.connect(chooseBrowser ? async url => {
@@ -44,14 +58,19 @@ export class GoogleSettingsTab extends PluginSettingTab {
                     } : undefined);
                     await plugin.refreshSources();
                     plugin.controller.reconnect(); this.display();
-                } catch (error) { message.setText(error instanceof Error ? error.message : 'Connection failed.'); }
-                finally { button.setDisabled(false); linkInput.value = ''; linkSetting.settingEl.hide(); }
+                } catch (error) {
+                    // A newer attempt replaced this one; its own result counts.
+                    if (current === attempt) message.setText(error instanceof Error ? error.message : 'Connection failed.');
+                } finally {
+                    button.setDisabled(false);
+                    if (current === attempt) { linkInput.value = ''; linkSetting.settingEl.hide(); }
+                }
             };
             connection.addButton(button => button.setButtonText(plugin.auth.connected() ? 'Reconnect Google' : 'Connect Google').setCta().onClick(() => connect(button)))
                 .addButton(button => button.setButtonText('Use another browser').onClick(() => connect(button, true)));
         }
         if (plugin.auth.connected()) new Setting(root).setName('Connection').addButton(button => button.setButtonText('Disconnect').onClick(() => {
-            plugin.auth.disconnect(); plugin.controller.setStatus('Disconnected'); this.display();
+            plugin.auth.disconnect(); plugin.controller.setStatus({ state: 'error', text: 'Not connected', detail: 'Connect Google in Calendar Sync settings.' }); this.display();
         }));
         deviceConnectionSettings(root, plugin, () => this.display());
         new Setting(root).setName('Calendars and task lists').setHeading();
@@ -84,9 +103,9 @@ export class GoogleSettingsTab extends PluginSettingTab {
         ] as const) new Setting(root).setName(name).setDesc(description).addToggle(toggle => toggle.setValue(settings[key]).onChange(async value => {
             settings[key] = value; await plugin.persist(); plugin.controller.reconnect();
         }));
-        new Setting(root).setName('Automatic sync interval').setDesc('Seconds. Default: 120. Minimum: 30.').addText(text => text.setValue(String(settings.intervalSeconds)).onChange(async value => {
+        new Setting(root).setName('Automatic sync interval').setDesc(`Seconds. Default: 120. Minimum: ${MIN_INTERVAL}. Maximum: ${MAX_INTERVAL}.`).addText(text => text.setValue(String(settings.intervalSeconds)).onChange(async value => {
             const seconds = Number(value);
-            if (Number.isFinite(seconds) && seconds >= 30) { settings.intervalSeconds = seconds; await plugin.persist(); plugin.controller.scheduler.resetPeriodic(); }
+            if (Number.isFinite(seconds) && seconds >= MIN_INTERVAL && seconds <= MAX_INTERVAL) { settings.intervalSeconds = seconds; await plugin.persist(); plugin.controller.scheduler.resetPeriodic(); }
         }));
         new Setting(root).setName('Time zone').setDesc('Used for daily-note boundaries and calendar event times.').addText(text => text.setValue(settings.timeZone).onChange(async value => {
             try { new Intl.DateTimeFormat('en', { timeZone: value }).format(); }

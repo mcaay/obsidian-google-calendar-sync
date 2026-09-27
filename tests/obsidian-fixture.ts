@@ -4,6 +4,7 @@ import { event, item } from './fixtures';
 import type { Item, Operation } from '../src/types';
 import { Platform } from 'obsidian';
 import { CLIENT_SECRET_KEY, GoogleAuth } from '../src/auth';
+import { cleanTitle, googleTitle } from '../src/markdown';
 
 interface TestState { items: Item[]; operations: Operation[]; loads: number }
 declare global { interface Window { gdnTest?: TestState } }
@@ -30,21 +31,22 @@ export default class FixturePlugin extends GoogleDailyNotes {
         this.auth.dispose();
         this.auth = new GoogleAuth(this.app.secretStorage, () => this.data.settings.clientId,
             async () => ({ status: 200, json: { access_token: 'fixture-access', expires_in: 3600 } }), async () => undefined, Platform.isMobile);
-        this.google.load = async () => { fixture.loads++; return structuredClone(fixture.items); };
+        // Items hold Google's plain titles; the real client escapes them on load.
+        this.google.load = async () => { fixture.loads++; return { items: structuredClone(fixture.items).map(value => ({ ...value, title: cleanTitle(value.title) })), failed: [] }; };
         this.google.sources = async () => ({ calendars: this.data.settings.calendars, taskLists: this.data.settings.taskLists });
         this.google.removeCreationMarker = async () => undefined;
         this.google.patch = async operation => {
             fixture.operations.push(structuredClone(operation));
             const target = fixture.items.find(value => value.kind === operation.kind && value.source === operation.source && value.id === operation.id);
             if (target) {
-                if (operation.title !== undefined) target.title = operation.title;
+                if (operation.title !== undefined) target.title = googleTitle(operation.title);
                 if (operation.done !== undefined) target.done = operation.done;
             }
         };
-        this.google.create = async (operation, beforeInsert) => {
-            if (await beforeInsert() === false) return undefined;
+        this.google.find = async () => [];
+        this.google.insert = async operation => {
             fixture.operations.push(structuredClone(operation));
-            const created = item({ id: `created-${fixture.operations.length}`, title: operation.title, done: operation.done });
+            const created = item({ id: `created-${fixture.operations.length}`, title: googleTitle(operation.title ?? ''), done: operation.done });
             fixture.items.push(created);
             return { source: created.source, id: created.id };
         };
