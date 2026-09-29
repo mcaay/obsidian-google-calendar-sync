@@ -53,7 +53,7 @@
 - Support creating simple Google Tasks from task rows with the daily note's date. Do not expose recurrence configuration in Obsidian.
 - Preserve normal cursor movement and Cmd+Enter checkbox behavior. Avoid surprising remapping of Vim keys.
 - Sync automatically on daily-note creation and every 120 seconds by default. Sync status toggles immediately, title edits on returning to Vim normal mode, and non-Vim edits after 10 seconds of inactivity in that note. Reset the periodic timer after an edit-triggered sync.
-- Use predetermined, documented conflict and recovery rules. Do not introduce decision popups or a manual sync button.
+- Use predetermined, documented conflict and recovery rules. Do not introduce decision popups. Sync stays automatic; the only manual trigger is **Sync now**, a command also offered in the status bar menu, requested on 2026-09-29.
 - Verify Google API capabilities before promising features. Clearly disclose any limits affecting requested task times or recurrence behavior.
 - Keep settings and other UI minimal, clean, and consistent with Obsidian.
 

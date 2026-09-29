@@ -57,7 +57,7 @@ Recurrence is managed in Google. The plugin shows the dated task instances Googl
 
 ## Sync timing
 
-Opening or creating an enabled note triggers a sync. The default interval is 120 seconds; it can be set between 30 seconds and one day. Checkbox changes sync immediately; title edits sync when Vim returns to normal mode, or after 10 seconds of inactivity without Vim. An edit-triggered sync restarts the interval. Editing text outside synced rows does not start a sync. Pending work also completes when its note is closed, disabled, renamed outside Obsidian or deleted.
+Opening or creating an enabled note triggers a sync. The default interval is 120 seconds; it can be set between 30 seconds and one day. Checkbox changes sync immediately; title edits sync when Vim returns to normal mode, or after 10 seconds of inactivity without Vim. An edit-triggered sync restarts the interval. The **Sync now** command, also in the `GCal:` status bar menu, sends pending edits and refreshes open notes immediately. It restarts the interval too; deletions still wait out their 5 seconds. Editing text outside synced rows does not start a sync. Pending work also completes when its note is closed, disabled, renamed outside Obsidian or deleted.
 
 ## Conflicts and failures
 

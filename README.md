@@ -42,6 +42,7 @@ Use `YYYY-MM-DD` filenames. Rename or move the three headings wherever you want;
 - **Vim `yyp` / `ddp`** pastes a task row as a new task due on that note's date. `ddp` deletes the original after 5 seconds.
 - **Vim `dd`** deletes from Google after 5 seconds. **`u` / Cmd+Z** within that window cancels deletion; undo right after creating a task removes it. Recurring Calendar events lose only that occurrence.
 - **Hover `GCal:`** in the status bar to see what is syncing, waiting or failing.
+- **Sync now**, from the command palette, a hotkey or the `GCal:` status bar menu, syncs immediately.
 
 Create and schedule Calendar events, including recurrence, in Google Calendar.
 

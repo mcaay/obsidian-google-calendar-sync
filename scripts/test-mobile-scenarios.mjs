@@ -47,6 +47,12 @@ export async function runMobileChecks(page) {
     await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
     await page.waitForFunction(before => window.gdnTest.loads > before, loadsBefore);
     console.log('PASS: returning to the foreground resumes sync.');
+    // Mobile has no status bar, so the command is the manual trigger there.
+    await page.waitForFunction(() => document.querySelector('.gdn-status')?.textContent === 'GCal: ✓');
+    const loadsBeforeCommand = await page.evaluate(() => window.gdnTest.loads);
+    await page.evaluate(() => window.app.commands.executeCommandById('google-daily-notes:sync-now'));
+    await page.waitForFunction(before => window.gdnTest.loads > before, loadsBeforeCommand);
+    console.log('PASS: the Sync now command syncs on mobile.');
 
     await page.evaluate(async () => {
         const plugin = window.app.plugins.plugins['google-daily-notes'];

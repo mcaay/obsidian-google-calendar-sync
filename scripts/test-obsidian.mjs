@@ -23,7 +23,8 @@ const support = join(homedir(), 'Library/Application Support/obsidian');
 const updates = (await readdir(support)).filter(name => /^obsidian-.*\.asar$/.test(name)).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 if (updates.length) await cp(join(support, updates.at(-1)), join(profile, updates.at(-1)));
 await writeFile(join(profile, 'obsidian.json'), JSON.stringify({ vaults: { '1234567890abcdef': { path: vault, ts: Date.now(), open: true } } }));
-await writeFile(join(vault, '.obsidian/app.json'), JSON.stringify({ vimMode: !mobile, useTab: true, tabSize: 4, propertiesInDocument: mobile ? 'visible' : 'hidden', livePreview: true, showLineNumber: false, defaultViewMode: 'source', readableLineLength: true }));
+// macOS defaults to native menus, which are outside the page and invisible to Playwright.
+await writeFile(join(vault, '.obsidian/app.json'), JSON.stringify({ vimMode: !mobile, useTab: true, tabSize: 4, propertiesInDocument: mobile ? 'visible' : 'hidden', livePreview: true, showLineNumber: false, defaultViewMode: 'source', readableLineLength: true, nativeMenus: false }));
 const plugins = ['google-daily-notes'];
 await writeFile(join(vault, '.obsidian/hotkeys.json'), JSON.stringify({ 'editor:toggle-checklist-status': [{ modifiers: ['Mod'], key: 'Enter' }] }));
 // Optional compatibility run against a locally installed Tasks plugin. Copy
@@ -196,6 +197,23 @@ try {
         await page.waitForFunction(({ previous, done }) => window.gdnTest.operations.length === previous + 1 && window.gdnTest.operations.at(-1).done === done, { previous, done }, { timeout: 3000 });
     }
     console.log('PASS: calendar tasks and Google Tasks check and uncheck exactly once per Cmd+Enter.');
+
+    // A title changed in Google appears at once instead of at the next interval.
+    const renamedInGoogle = async (title, syncNow) => {
+        await page.evaluate(title => { window.gdnTest.items.find(item => item.id === 'task-1').title = title; }, title);
+        await syncNow();
+        await page.waitForFunction(title => window.app.workspace.activeEditor.editor.getValue().includes(`] ${title} <!-- gdn:`), title, { timeout: 3000 });
+    };
+    await renamedInGoogle('Buy tea', async () => {
+        await page.locator('.gdn-status').click();
+        const item = page.locator('.menu .menu-item', { hasText: 'Sync now' });
+        await item.waitFor();
+        await page.screenshot({ path: 'output/playwright/sync-now-menu.png' });
+        await item.click();
+    });
+    await renamedInGoogle('Buy coffee', () => page.evaluate(() => window.app.commands.executeCommandById('google-daily-notes:sync-now')));
+    await page.waitForFunction(() => document.querySelector('.gdn-status')?.textContent === 'GCal: ✓', undefined, { timeout: 3000 });
+    console.log('PASS: Sync now from the status bar menu and the command refreshes the note at once.');
 
     await page.screenshot({ path: 'output/playwright/daily-note.png' });
     await page.evaluate(async () => {
@@ -484,7 +502,7 @@ try {
     await page.setViewportSize({ width: 1000, height: 900 });
     await page.screenshot({ path: 'output/playwright/daily-note-narrow.png' });
     assert.deepEqual(errors, [], 'No renderer exceptions');
-    await writeFile('output/playwright/result.json', JSON.stringify({ passed: true, vault, screenshots: ['daily-note.png', 'daily-note-narrow.png', 'settings.png'], errors, hostErrors }, null, 2));
+    await writeFile('output/playwright/result.json', JSON.stringify({ passed: true, vault, screenshots: ['daily-note.png', 'sync-now-menu.png', 'daily-note-narrow.png', 'settings.png'], errors, hostErrors }, null, 2));
     console.log('Obsidian integration checks passed.');
     }
 } catch (error) {

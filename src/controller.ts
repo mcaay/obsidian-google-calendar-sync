@@ -1,4 +1,4 @@
-import { MarkdownView, Notice, setTooltip, TFile, type App, type Editor, type Plugin } from 'obsidian';
+import { MarkdownView, Menu, Notice, setTooltip, TFile, type App, type Editor, type Plugin } from 'obsidian';
 import type { EditorView } from '@codemirror/view';
 import { insertText, replaceEditorText } from './editor';
 import { enableNote, noteDate, regions, syncedRows, TEMPLATE, visibleRow } from './markdown';
@@ -15,7 +15,8 @@ interface Connection {
  * How to read this code:
  * 1. The constructor wires SyncEngine (sync.ts) to the vault and to one
  *    SyncScheduler (scheduler.ts) queue. Each scheduled run ends by showing
- *    a final status; its tooltip carries the reason.
+ *    a final status; its tooltip carries the reason. Selecting the status
+ *    opens a Sync now menu, which calls resume().
  * 2. start() registers note events. A Reading-view checkbox click marks its
  *    note; the one checkbox flip reaching that note within a second counts as
  *    this device's edit, whether it arrives as a file change or in another
@@ -37,7 +38,10 @@ export class Controller {
 
     constructor(private plugin: Plugin, public data: PluginData, remote: Remote, save: (scope: SaveScope) => boolean, private connection: Connection) {
         this.status = plugin.addStatusBarItem();
-        this.status.addClass('gdn-status');
+        this.status.addClass('gdn-status', 'mod-clickable');
+        plugin.registerDomEvent(this.status, 'click', event => {
+            new Menu().addItem(item => item.setTitle('Sync now').setIcon('refresh-cw').onClick(() => this.resume())).showAtMouseEvent(event);
+        });
         this.setStatus({ state: 'error', text: 'Not connected' });
         this.engine = new SyncEngine(data, remote, {
             read: path => this.read(path),
@@ -259,6 +263,9 @@ export class Controller {
         this.scheduler.resetPeriodic();
     }
 
+    // Runs when the network returns, on returning to the foreground and for
+    // Sync now: sends pending edits and refreshes every open note. Deletions
+    // still wait out their 5 seconds.
     resume(): void {
         for (const path of this.scheduler.dirty) this.scheduler.normal(path);
         this.scheduleDeletions();

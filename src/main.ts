@@ -83,6 +83,7 @@ export default class GoogleDailyNotes extends Plugin {
                 if (context.file) void this.controller.insertTemplate(editor, context.file).catch(error => new Notice(error instanceof Error ? error.message : String(error)));
             },
         });
+        this.addCommand({ id: 'sync-now', name: 'Sync now', icon: 'refresh-cw', callback: () => this.controller.resume() });
         // sessionStorage survives plugin reloads but not an app restart.
         let restarted = false;
         try {
