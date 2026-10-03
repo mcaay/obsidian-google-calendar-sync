@@ -13,8 +13,10 @@ Update since the video was published:
 - now the plugin works on mobile too
 
 Security:
-- personally I don't trust random plugins from the internet (like this one) strongly enough to connect my google account to it, therefore if you're like me on this one, I advise you to give this github repo to your AI for security audit before you trust it
-- obsidian doesn't update community plugins automatically, so this is good
+- the plugin connects directly to Google, with no telemetry - data only travels between your obsidian and Google, there is no 3rd place that would see anything
+- credentials use Obsidian SecretStorage
+- personally I don't trust random plugins from the internet (like this one) strongly enough to connect my google account to it, unless it is open source and I have used my AI agent to run a security audit on it, therefore if you're like me, I advise you to give this github repo to your AI for security audit
+- afterwards obsidian doesn't update community plugins automatically, so this is good
 - if at any point in the future you will want to update, you can run a security audit again
 - in the `reviews` folder you can find security audits I performed, sorted by date, with the model clearly marked and a TLDR section at the top in the newest audits
 
@@ -55,7 +57,6 @@ Use `YYYY-MM-DD` filenames. Rename or move the three headings wherever you want;
 - Deleting a meeting you organize cancels it for all guests, and Google emails them the cancellation.
 - If Google's answer to a new task is lost, the plugin searches for the task before sending it again. Rarely, this still leaves a duplicate, which shows in the note.
 
-The plugin connects directly to Google, with no telemetry. Other note text stays in your vault; credentials use Obsidian SecretStorage.
 
 ## Review
 
