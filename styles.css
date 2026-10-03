@@ -11,7 +11,10 @@
     display: none;
 }
 
-:is(.markdown-source-view.is-live-preview, .markdown-reading-view) .metadata-container:has(.metadata-property[data-property-key="google-daily"]):not(:has(.metadata-property:not([data-property-key="google-daily"]):not([data-property-key="google-daily-date"]))) {
+/* A container holding only those properties stays hidden too. The plugin
+   marks each view with how many it has; see src/properties.ts. */
+[data-gdn-own-properties="1"] :is(.markdown-source-view.is-live-preview, .markdown-reading-view) .metadata-container[data-property-count="1"],
+[data-gdn-own-properties="2"] :is(.markdown-source-view.is-live-preview, .markdown-reading-view) .metadata-container[data-property-count="2"] {
     display: none;
 }
 

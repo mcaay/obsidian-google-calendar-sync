@@ -45,7 +45,7 @@ function load(store: (key: string, value: unknown) => void, local = new Map<stri
     const require = createRequire(import.meta.url);
     runInNewContext(bundle, {
         module: runtimeModule, exports: runtimeModule.exports,
-        crypto, TextEncoder, TextDecoder, btoa, atob, structuredClone, URL, URLSearchParams, setTimeout, clearTimeout,
+        crypto, TextEncoder, TextDecoder, btoa, atob, structuredClone, URL, URLSearchParams, setTimeout, clearTimeout, performance,
         window: { setTimeout, clearTimeout }, document: {},
         require: (id: string) => {
             if (id === 'obsidian') {
@@ -67,7 +67,7 @@ it('loads the production plugin in a mobile runtime with no Node, Electron or Bu
     const local = new Map<string, unknown>();
     const { plugin } = load((key, value) => local.set(key, structuredClone(value)), local);
     await plugin.onload();
-    expect([...local.keys()].sort()).toEqual(['google-daily-notes-device-state', 'google-daily-notes-journal']);
+    expect([...local.keys()].sort()).toEqual(['google-daily-notes-device-state', 'google-daily-notes-journal', 'google-daily-notes-session']);
     await expect(plugin.auth.connect()).rejects.toThrow('setup code');
 });
 

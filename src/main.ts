@@ -4,6 +4,7 @@ import { GoogleClient } from './google';
 import { Controller } from './controller';
 import { editorExtension } from './editor';
 import { GoogleSettingsTab } from './settings';
+import { markOwnProperties } from './properties';
 import { initialData, type PluginData } from './types';
 import { DEVICE_STATE_KEY, deviceSnapshot, JOURNAL_KEY, journalSnapshot, restoreDeviceState, sharedSnapshot, type DeviceSnapshot, type JournalSnapshot } from './device-state';
 import { RequestTimeout, type HttpResponse, type Transport } from './http';
@@ -22,6 +23,8 @@ const SESSION_KEY = 'google-daily-notes-session';
  * 4. saveLocal() writes the journal or all device state and reads it back.
  *    Obsidian's storage helper ignores write errors, so a failed read-back is
  *    the only signal; SyncEngine then sends nothing (1.7).
+ * 5. markOwnProperties() (properties.ts) lets styles.css hide the plugin's
+ *    own properties.
  * Ordinary: opening an enabled daily note starts a sync without a button.
  * Tricky: an offline title edit stays in the journal and is retried after restart.
  */
@@ -84,13 +87,16 @@ export default class GoogleDailyNotes extends Plugin {
             },
         });
         this.addCommand({ id: 'sync-now', name: 'Sync now', icon: 'refresh-cw', callback: () => this.controller.resume() });
-        // sessionStorage survives plugin reloads but not an app restart.
-        let restarted = false;
-        try {
-            restarted = !sessionStorage.getItem(SESSION_KEY);
-            sessionStorage.setItem(SESSION_KEY, '1');
-        } catch { /* Without it, nothing tied to undo history is pruned. */ }
-        this.app.workspace.onLayoutReady(() => this.controller.start(restarted));
+        // Undo history lives in memory. performance.timeOrigin survives plugin
+        // reloads and changes when the app or its window reloads, which is
+        // exactly when that history is gone.
+        const started = performance.timeOrigin;
+        const restarted = this.app.loadLocalStorage(SESSION_KEY) !== started;
+        this.app.saveLocalStorage(SESSION_KEY, started);
+        this.app.workspace.onLayoutReady(() => {
+            this.controller.start(restarted);
+            markOwnProperties(this);
+        });
         this.registerDomEvent(document, 'visibilitychange', () => {
             if (Platform.isMobile && document.visibilityState === 'visible') this.controller.resume();
         });
