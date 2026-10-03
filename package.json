@@ -1,6 +1,6 @@
 {
     "name": "google-daily-notes",
-    "version": "0.9.3",
+    "version": "0.9.4",
     "private": true,
     "description": "Google Calendar and Tasks as editable Markdown in Obsidian daily notes.",
     "scripts": {

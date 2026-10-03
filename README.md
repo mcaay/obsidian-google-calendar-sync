@@ -1,4 +1,4 @@
-# Calendar Sync by mcaay
+# Google Calendar Sync by mcaay
 
 Idea:
 - events and tasks from Google appear as normal markdown in your daily notes
@@ -31,7 +31,7 @@ Obsidian Sync caveat:
 
 Requires Obsidian 1.13+. Runs on macOS, Windows and Linux, and on iPhone (verified on a physical iPhone; Android is untested). [Connect your phone through Obsidian Sync](docs/setup.md#connect-another-device).
 
-1. In Obsidian, open **Settings → Community plugins → Browse**, search for **Calendar Sync by mcaay**, then select **Install** and **Enable**.
+1. In Obsidian, open **Settings → Community plugins → Browse**, search for **Google Calendar Sync by mcaay**, then select **Install** and **Enable**.
 2. [Connect Google](https://github.com/mcaay/obsidian-google-calendar-sync/blob/main/docs/setup.md). You currently need your own Google Cloud OAuth client; the guide covers setup and choosing calendars and task lists.
 3. Add this to your daily-note template. If it already has properties, add `google-daily: true` to those.
 
