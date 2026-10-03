@@ -6,7 +6,7 @@
 
 ## 1. Replace H2's proposed fix
 
-Reference: [H2](<Review - Opus 5.5.md>).
+Reference: [H2](<2026-09-26 Review - Opus 5.5.md>).
 
 An empty marker search does **not** prove that an earlier POST failed. The client timeout in [src/main.ts:37](https://github.com/mcaay/obsidian-google-calendar-sync/blob/ff020e5f4554d14167a5974e55d3dc7f54bb63ec/src/main.ts#L37) stops waiting without cancelling the underlying request. That request can finish after the search. A marker can also have been removed. Waiting one minute does not establish either request failure or atomicity between search and insertion. The documented [Tasks insert API](https://developers.google.com/workspace/tasks/reference/rest/v1/tasks/insert) offers no insertion idempotency parameter.
 
@@ -22,7 +22,7 @@ Also add the actual unsafe transition already present: [src/sync.ts:362](https:/
 
 ## 2. Keep H1, but do not solve it by dropping edits indiscriminately
 
-Reference: [H1](<Review - Opus 5.5.md>).
+Reference: [H1](<2026-09-26 Review - Opus 5.5.md>).
 
 The diagnosis is correct. Pulls should continue for unaffected sources while a particular write fails. However, “Google wins, local edit dropped” is a product-policy change, not a necessary technical fix. A non-quota 403 can become recoverable after reconnecting, enabling an API, or restoring permission. A rejected title is still user-authored text worth preserving.
 
@@ -30,7 +30,7 @@ Recommend preserving the failed edit or recoverable draft, distinguishing failur
 
 ## 3. Strengthen C1's remedy and separate stale-field propagation
 
-Reference: [C1](<Review - Opus 5.5.md>).
+Reference: [C1](<2026-09-26 Review - Opus 5.5.md>).
 
 Allowing legitimate incoming document replacements through the filter addresses the demonstrated content loss. But “adopt them as the baseline, or skip staging for that run” is incomplete:
 
@@ -42,7 +42,7 @@ The fix needs explicit distinction between local user edit intent and imported f
 
 ## 4. Add the missing recovery and multi-device findings
 
-These were reproduced in the earlier [Astra review](<Review - Astra.md>), with evidence in `output/review-astra/repro-results.json`. They deserve explicit entries rather than being implied by C1 or described as generally sound bookkeeping.
+These were reproduced in the earlier [Astra review](<2026-09-26 Review - Astra.md>), with evidence in `output/review-astra/repro-results.json`. They deserve explicit entries rather than being implied by C1 or described as generally sound bookkeeping.
 
 | Missing issue | Why it matters | Suggested severity |
 | --- | --- | --- |
@@ -55,7 +55,7 @@ These were reproduced in the earlier [Astra review](<Review - Astra.md>), with e
 
 ## 5. Split M6 into a high-priority persistence defect and a growth concern
 
-Reference: [M6](<Review - Opus 5.5.md>).
+Reference: [M6](<2026-09-26 Review - Opus 5.5.md>).
 
 Silent failure at the persistence boundary compromises deletion recovery and duplicate prevention, so it deserves **High** priority independently of growth. I confirmed it in Obsidian by injecting a storage-write failure: `persist()` resolved while the saved state remained unchanged.
 
@@ -67,7 +67,7 @@ Recommend verified persistence first. Define what makes each record safely dispo
 
 ## 6. Constrain M1's optimizations to preserve correctness
 
-Reference: [M1](<Review - Opus 5.5.md>).
+Reference: [M1](<2026-09-26 Review - Opus 5.5.md>).
 
 `fields` masks and shared per-source fetches are good starting points. The remaining proposals need qualifications:
 

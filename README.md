@@ -9,9 +9,22 @@ Why:
 - google also handles meetings and events very well, it's easy to invite someone to a meeting if you just have his email address
 - it's nice to see everything in obsidian rather than checking 2 separate places every day
 
+Update since the video was published:
+- now the plugin works on mobile too
+
+Security:
+- personally I don't trust random plugins from the internet (like this one) strongly enough to connect my google account to it, therefore if you're like me on this one, I advise you to give this github repo to your AI for security audit before you trust it
+- obsidian doesn't update community plugins automatically, so this is good
+- if at any point in the future you will want to update, you can run a security audit again
+- in the `reviews` folder you can find security audits I performed, sorted by date, with the model clearly marked and a TLDR section at the top in the newest audits
+
 Video walkthrough - **first 6 minutes is a TLDR section**, then I'm rambling for 15 more minutes.
 
 [![Watch the walkthrough on YouTube](https://img.youtube.com/vi/RmP0dOEpyMs/maxresdefault.jpg)](https://www.youtube.com/watch?v=RmP0dOEpyMs)
+
+Obsidian Sync caveat:
+- if you use it, I advise to set "Conflict resolution" setting to "Create conflict file"
+- this is not even related to this plugin, but several times I found the "Automatically merge" option to result in my phone's daily note overwriting the changes on my laptop without warning
 
 
 ## Install

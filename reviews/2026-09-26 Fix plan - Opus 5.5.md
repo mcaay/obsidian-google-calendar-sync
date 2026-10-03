@@ -1,6 +1,6 @@
 # Fix plan - Opus 5.5
 
-Date: 2026-09-26. Baseline: `ff020e5` (v0.9.0, unreleased). Sources: `Review - Opus 5.5.md` (O), `Review - Fable 5.1.md` (F) and `Review - Astra.md` (A). Revised the same day after the remarks on O by Fable (`Review - Opus 5.5 - remarks by Fable 5.1.md`, FR) and Astra (`Remarks on Review - Opus 5.5.md`, AR), and again after their remarks on this plan (`Fix plan - Opus 5.5 - remarks by Fable 5.1.md`, FP, and `Remarks on Fix plan - Opus 5.5.md`, AP). IDs such as O-C1, F-H3, A-7, AR-1 or FP-2 refer to their findings or numbered remarks.
+Date: 2026-09-26. Baseline: `ff020e5` (v0.9.0, unreleased). Sources: `2026-09-26 Review - Opus 5.5.md` (O), `2026-09-26 Review - Fable 5.1.md` (F) and `2026-09-26 Review - Astra.md` (A). Revised the same day after the remarks on O by Fable (`2026-09-26 Review - Opus 5.5 - remarks by Fable 5.1.md`, FR) and Astra (`2026-09-26 Remarks on Review - Opus 5.5.md`, AR), and again after their remarks on this plan (`2026-09-26 Fix plan - Opus 5.5 - remarks by Fable 5.1.md`, FP, and `2026-09-26 Remarks on Fix plan - Opus 5.5.md`, AP). IDs such as O-C1, F-H3, A-7, AR-1 or FP-2 refer to their findings or numbered remarks.
 
 ## Decisions
 
