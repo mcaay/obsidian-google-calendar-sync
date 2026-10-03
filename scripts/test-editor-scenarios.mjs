@@ -304,7 +304,7 @@ export async function runEditorChecks(page, { editorText, selectRow, setVim }) {
         await page.route('https://example.invalid/**', route => { hits.push(route.request().url()); return route.fulfill({ status: 204, body: '' }); });
         const date = '2026-10-10';
         await open(date, [event('beacon', '![pixel](https://example.invalid/p.png) <img src="https://example.invalid/q.png"> `$= 1`', date)], 'q.png');
-        assert.match(await editorText(), /\\!\[pixel\]\(https:\/\/example\.invalid\/p\.png\) \\<img/, 'The title is escaped');
+        assert.match(await editorText(), /\\!\[pixel\]\\\(https:\/\/example\.invalid\/p\.png\) \\<img/, 'The title is escaped');
         await pause(1500);
         await page.evaluate(() => window.app.commands.executeCommandById('markdown:toggle-preview'));
         await page.locator('.workspace-leaf.mod-active .markdown-preview-view').waitFor();
@@ -313,6 +313,43 @@ export async function runEditorChecks(page, { editorText, selectRow, setVim }) {
         assert.deepEqual(hits, [], 'No remote request in Live Preview or Reading view');
         await page.unroute('https://example.invalid/**');
         console.log('PASS: remote titles load no images or HTML in Live Preview and Reading view.');
+    }
+
+    // 2026-10-03 audits: a title someone else wrote cannot become a clickable action.
+    {
+        const date = '2026-10-11';
+        await open(date, [
+            event('invite', '[Join meeting](obsidian://new?file=Pwned&content=x&overwrite=true) $\\href{file:///etc/hosts}{agenda}$ %% https://example.invalid/agenda', date),
+            event('after', 'Row after the invitation', date, { sort: `${date} 11:00` }),
+        ], 'Row after the invitation');
+        // Reading view renders links as anchors; Live Preview as link and URL spans.
+        const links = () => page.evaluate(() => {
+            const leaf = '.workspace-leaf.mod-active';
+            const anchors = [...document.querySelectorAll(`${leaf} .markdown-preview-view a`)].map(anchor => anchor.getAttribute('href') ?? '');
+            const spans = [...document.querySelectorAll(`${leaf} .cm-content .cm-url, ${leaf} .cm-content .cm-link`)].map(span => span.textContent ?? '');
+            return [...anchors, ...spans];
+        });
+        const math = () => page.evaluate(() => document.querySelectorAll('.workspace-leaf.mod-active mjx-container').length);
+        const row = () => page.evaluate(() => [...document.querySelectorAll('.workspace-leaf.mod-active .cm-line, .workspace-leaf.mod-active .markdown-preview-view li')]
+            .map(element => element.textContent ?? '').find(text => text.includes('Join meeting')) ?? '');
+        const check = async view => {
+            const found = await links();
+            assert.deepEqual(found.filter(link => /(obsidian|file):/i.test(link)), [], `No obsidian: or file: link in ${view}: ${JSON.stringify(found)}`);
+            assert.ok(found.some(link => link.includes('https://example.invalid/agenda')), `A bare web address still links in ${view}: ${JSON.stringify(found)}`);
+            // A rendered link would hide its brackets and its destination.
+            assert.match(await row(), /\[Join meeting\]\\?\(obsidian:\/\/new/, `The invitation link stays text in ${view}`);
+            assert.equal(await math(), 0, `No rendered math in ${view}`);
+        };
+        await selectRow('My own notes stay here.');
+        await pause(1000);
+        await check('Live Preview');
+        await page.evaluate(() => window.app.commands.executeCommandById('markdown:toggle-preview'));
+        await page.locator('.workspace-leaf.mod-active .markdown-preview-view').waitFor();
+        await pause(1000);
+        await check('Reading view');
+        assert.ok(await page.locator('.workspace-leaf.mod-active .markdown-preview-view').getByText('Row after the invitation').isVisible(), 'A %% in a title hides nothing after it');
+        await page.evaluate(() => window.app.commands.executeCommandById('markdown:toggle-preview'));
+        console.log('PASS: titles from other people add no links, math or comments.');
     }
     await setItems(originalItems);
 }

@@ -22,7 +22,7 @@ First connect Google on a Mac, Windows or Linux computer using the steps above.
 
 Obsidian Sync carries an encrypted connection package. The code is displayed only on the exporting device and is not saved. After setup, each device stores its connection in SecretStorage and talks directly to Google; the computer can be closed. The same setup works for another computer.
 
-Keep the setup code private. Import removes the shared package, but Sync history or backups can retain encrypted copies. The 30-minute limit is enforced by this plugin, not by Google. Revoke the app in your Google account to invalidate the underlying authorization.
+Keep the setup code private and type it on the phone rather than copying it, since clipboard history can keep a copy. Import removes the shared package, but Sync history or backups can retain encrypted copies. The 30-minute limit is enforced by this plugin, not by Google. Revoke the app in your Google account to invalidate the underlying authorization. **Disconnect** on any device does this too, which signs out every device that shares it.
 
 Phones sync while Obsidian is open and resume when it returns to the foreground. Continuous background sync is not supported. Device-specific pending edits are kept separately, so syncing settings does not replay another device's requests.
 

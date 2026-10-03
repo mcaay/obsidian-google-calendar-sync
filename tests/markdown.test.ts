@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BLOCKED, checkEdit, cleanTitle, enableNote, googleTitle, isTaskRow, lineChanges, noteDate, parseItemKey, regions, renderNote, renderRow, ROW_ID, splitsRow, TEMPLATE, type EditContext } from '../src/markdown';
+import { BLOCKED, checkEdit, cleanTitle, enableNote, googleTitle, isTaskRow, lineChanges, noteDate, parseItemKey, regions, renderNote, renderRow, ROW_ID, rowKey, splitsRow, TEMPLATE, type EditContext } from '../src/markdown';
 import { EMPTY, DATE, event, item, seeded } from './fixtures';
 
 describe('daily note activation', () => {
@@ -92,6 +92,12 @@ describe('managed Markdown', () => {
         expect(row.replace(ROW_ID, '')).toBe('    - [ ] New title ');
     });
     it('renders after a heading with no trailing newline', () => expect(renderNote('- [ ] tasks <!-- gdn:tasks -->', [item()])).toContain('-->\n    - [ ] Buy coffee'));
+    it.each(['constructor', '__proto__', 'toString', 'hasOwnProperty', 'abc'])('keeps a row with the foreign key %s as plain text', key => {
+        expect(rowKey(`    - [ ] x <!-- gdn:${key} -->`)).toBeUndefined();
+        expect(rowKey(`    - [ ] x <!-- gdn:${item().key} -->`)).toBe(item().key);
+        expect(rowKey('- [ ] tasks <!-- gdn:tasks -->')).toBe('tasks');
+        expect(rowKey('    - [ ] x <!-- gdn:new:device:1 -->')).toBe('new:device:1');
+    });
     it('decodes row keys, including Unicode sources', () => {
         expect(parseItemKey(item().key)).toEqual({ kind: 'task', source: 'list', id: 'task-1' });
         expect(parseItemKey(event({ source: 'kalendarz-zażółć' }).key)).toMatchObject({ kind: 'event', source: 'kalendarz-zażółć' });
@@ -117,19 +123,22 @@ describe('the tasks group (D5)', () => {
 });
 
 describe('titles from Google (D7)', () => {
-    it('escapes HTML, embeds and inline code, and keeps links', () => {
-        expect(cleanTitle('![](https://tracker.example/p.png)')).toBe('\\![](https://tracker.example/p.png)');
+    it('escapes HTML, embeds, inline code, links, math and comments', () => {
+        expect(cleanTitle('![](https://tracker.example/p.png)')).toBe('\\![]\\(https://tracker.example/p.png)');
         expect(cleanTitle('<img src=x> and <iframe src=y>')).toBe('\\<img src=x> and \\<iframe src=y>');
         expect(cleanTitle('![[Private note]]')).toBe('\\![[Private note]]');
-        expect(cleanTitle('`$= dv.pages()`')).toBe('\\`$= dv.pages()\\`');
-        expect(cleanTitle('[Agenda](https://example.com) *soon*')).toBe('[Agenda](https://example.com) *soon*');
+        expect(cleanTitle('`$= dv.pages()`')).toBe('\\`\\$= dv.pages()\\`');
+        // A title written by someone else must not become a clickable action (2026-10-03 audits).
+        expect(cleanTitle('[Join](obsidian://new?file=x&overwrite=true) *soon*')).toBe('[Join]\\(obsidian://new?file=x&overwrite=true) *soon*');
+        expect(cleanTitle('$\\href{file:///x}{y}$ 50%% done')).toBe('\\$\\href{file:///x}{y}\\$ 50\\%\\% done');
+        expect(cleanTitle('[[Project]] #tag')).toBe('[[Project]] #tag');
     });
     it('cannot inject a comment marker or a line break', () => {
         const title = cleanTitle('hello\n<!-- gdn:tasks -->');
         expect(title).toBe('hello \\<!-- gdn:tasks -->');
         expect(ROW_ID.test(`    - [ ] ${title}`)).toBe(false);
     });
-    it.each(['a\\<b', '\\\\', '![x](y)', '`code`', 'C:\\path\\n', 'end\\', '<img src=x>', '\\![', 'x!y', '\\\\<', '&lt;tag&gt;', 'a <!-- gdn:tasks -->', 'already \\escaped'])('round-trips %j', title => {
+    it.each(['a\\<b', '\\\\', '![x](y)', '`code`', 'C:\\path\\n', 'end\\', '<img src=x>', '\\![', 'x!y', '\\\\<', '&lt;tag&gt;', 'a <!-- gdn:tasks -->', 'already \\escaped', '[a](b) [c](d)', 'a]\\(b', ']\\\\(', ']]((', '$5 or 10%', '%%x%%', '\\$', '\\%', '$\\href{file:///x}{y}$'])('round-trips %j', title => {
         expect(googleTitle(cleanTitle(title))).toBe(title);
     });
     it('sends other backslashes a user types unchanged', () => expect(googleTitle('C:\\temp \\d')).toBe('C:\\temp \\d'));

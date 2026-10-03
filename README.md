@@ -31,7 +31,7 @@ Obsidian Sync caveat:
 
 Requires Obsidian 1.13+. Runs on macOS, Windows and Linux, and on iPhone (verified on a physical iPhone; Android is untested). [Connect your phone through Obsidian Sync](docs/setup.md#connect-another-device).
 
-1. Install **Calendar Sync by mcaay** from **Settings → Community plugins → Browse** and enable it. If it is not listed yet, download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/mcaay/obsidian-google-calendar-sync/releases/latest) into `<Vault>/.obsidian/plugins/google-daily-notes/`, then enable it in **Settings → Community plugins**.
+1. In Obsidian, open **Settings → Community plugins → Browse**, search for **Calendar Sync by mcaay**, then select **Install** and **Enable**.
 2. [Connect Google](https://github.com/mcaay/obsidian-google-calendar-sync/blob/main/docs/setup.md). You currently need your own Google Cloud OAuth client; the guide covers setup and choosing calendars and task lists.
 3. Add this to your daily-note template. If it already has properties, add `google-daily: true` to those.
 
@@ -47,24 +47,12 @@ google-daily: true
 
 Use `YYYY-MM-DD` filenames. Rename or move the three headings wherever you want; keep their comments. Only checkbox rows directly under **google tasks** become Google Tasks; other lines there stay in your note. [Other date formats and template options](https://github.com/mcaay/obsidian-google-calendar-sync/blob/main/docs/setup.md#daily-note-template).
 
-## Use it
-
-- **Cmd/Ctrl+Enter** toggles tasks. Calendar titles starting with `⬜️` or `✅` also work as checkboxes when enabled in settings.
-- **Edit a title** and press Escape in Vim. Without Vim, edits sync after 10 seconds of inactivity.
-- **Vim `o` / `O`** on a Google Task creates another task due on the note's date.
-- **Vim `yyp` / `ddp`** pastes a task row as a new task due on that note's date. `ddp` deletes the original after 5 seconds.
-- **Vim `dd`** deletes from Google after 5 seconds. **`u` / Cmd+Z** within that window cancels deletion; undo right after creating a task removes it. Recurring Calendar events lose only that occurrence.
-- **Hover `GCal:`** in the status bar to see what is syncing, waiting or failing.
-- **Sync now**, from the command palette, a hotkey or the `GCal:` status bar menu, syncs immediately.
-
-Create and schedule Calendar events, including recurrence, in Google Calendar.
-
 ## Limits
 
 - Google Tasks' API exposes dates, but no reminder times or recurrence controls. A typed `📅 13:00` stays in the title. Deleting an entire repeating task series cannot be guaranteed.
 - Undo after the 5-second window recreates a Google Task without its recurrence or reminder time. It cannot restore a deleted Calendar event.
 - Only edits made in Obsidian's editor reach Google. A change that arrives through Sync, another app or a plugin that writes the file shows Google's value again at the next sync.
-- Deleting a meeting you organize cancels it for all guests, without notification emails.
+- Deleting a meeting you organize cancels it for all guests, and Google emails them the cancellation.
 - If Google's answer to a new task is lost, the plugin searches for the task before sending it again. Rarely, this still leaves a duplicate, which shows in the note.
 
 The plugin connects directly to Google, with no telemetry. Other note text stays in your vault; credentials use Obsidian SecretStorage.

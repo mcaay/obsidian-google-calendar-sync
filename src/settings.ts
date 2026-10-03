@@ -1,4 +1,4 @@
-import { Platform, PluginSettingTab, type App, type ButtonComponent, type SettingDefinition, type SettingDefinitionItem } from 'obsidian';
+import { Notice, Platform, PluginSettingTab, type App, type ButtonComponent, type SettingDefinition, type SettingDefinitionItem } from 'obsidian';
 import { CLIENT_SECRET_KEY } from './auth';
 import { MAX_INTERVAL, MIN_INTERVAL } from './scheduler';
 import type GoogleDailyNotes from './main';
@@ -75,8 +75,13 @@ export class GoogleSettingsTab extends PluginSettingTab {
                                 setting.addText(text => {
                                     text.setPlaceholder('...apps.googleusercontent.com').setValue(settings.clientId);
                                     text.inputEl.addEventListener('change', () => {
-                                        settings.clientId = text.getValue().trim();
+                                        const clientId = text.getValue().trim();
+                                        if (clientId === settings.clientId) return;
+                                        settings.clientId = clientId;
+                                        // The old client's token cannot be used with the new one.
+                                        plugin.auth.forget();
                                         void plugin.persist();
+                                        this.update();
                                     });
                                 });
                             },
@@ -132,8 +137,15 @@ export class GoogleSettingsTab extends PluginSettingTab {
                                 setting.addButton(button => button.setButtonText(plugin.auth.connected() ? 'Reconnect Google' : 'Connect Google').setCta().onClick(() => connect(button)))
                                     .addButton(button => button.setButtonText('Use another browser').onClick(() => connect(button, true)));
                             }
-                            if (plugin.auth.connected()) setting.addButton(button => button.setButtonText('Disconnect').onClick(() => {
-                                plugin.auth.disconnect(); plugin.controller.setStatus({ state: 'error', text: 'Not connected', detail: 'Connect Google in Calendar Sync settings.' }); this.update();
+                            if (plugin.auth.connected()) setting.addButton(button => button.setButtonText('Disconnect').setTooltip('Revokes access at Google, which signs out every device connected with a setup code.').onClick(async () => {
+                                button.setDisabled(true);
+                                const revoked = await plugin.auth.disconnect();
+                                // The overdue-event list holds event titles; a new connection rebuilds it.
+                                plugin.data.calendars = {};
+                                plugin.saveLocal('all');
+                                plugin.controller.setStatus({ state: 'error', text: 'Not connected', detail: 'Connect Google in Calendar Sync settings.' });
+                                this.update();
+                                if (!revoked) new Notice('Calendar Sync: disconnected here, but Google could not be reached to revoke access. Remove the app in your Google account connections.', 10000);
                             }));
                         },
                     },

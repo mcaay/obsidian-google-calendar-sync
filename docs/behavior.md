@@ -32,11 +32,11 @@ Event time, duration, row identity, and group structure remain protected. An edi
 
 Only edits made in Obsidian's editor on this device change Google: typing, checkbox toggles, deletions, undo and redo, and checkbox clicks in Reading view. Changes that reach a note any other way are treated as display: Obsidian Sync, iCloud or Dropbox, git, other apps, and plugins that write the file directly. A synced row changed that way shows Google's values again at the next sync. Deleting a row outside Obsidian's editor never deletes the Google item; it returns at the next sync.
 
-In the Google Tasks group, only `- [ ]` and `- [x]` rows directly under the heading become Google Tasks. Plain text, other bullets, nested lines and code blocks stay local and untouched. A task row belongs to the device that created it: the plugin's `o`, `O` and Enter give it a hidden ID at once, and a checkbox row you type or paste gets one in the same edit. A task row that arrives from another device without an ID stays a local row.
+In the Google Tasks group, only `- [ ]` and `- [x]` rows directly under the heading become Google Tasks. Plain text, other bullets, nested lines and code blocks stay local and untouched. A task row belongs to the device that created it: the plugin's `o`, `O` and Enter give it a hidden ID at once, and a checkbox row you type or paste gets one in the same edit. Each device remembers the IDs it issued. A task row that arrives from elsewhere without an ID, or with a new-task ID this device did not issue, stays a local row. A synced row from another device can be edited before this device renders it only if its task list is enabled here. Hidden IDs in any other format are ignored and the line stays plain text.
 
 Calendar groups stay in chronological order. Task rows keep the order you give them; a new task from Google appears at its sorted place among them. A sync changes only the lines that differ.
 
-Titles from Google are shown as text. HTML, image and note embeds, and inline code in a title are escaped with backslashes, so an invitation or an assigned task cannot make a note load remote content or run inline code. Links and emphasis still work. Editing such a title sends it back without the added backslashes.
+Titles from Google are shown as text. Anyone can send you an invitation and colleagues can assign you tasks, so HTML, image and note embeds, inline code, Markdown links, math and `%%` comments in a title are escaped with backslashes. A title cannot load remote content, run inline code, hide the rest of the note or add a clickable link such as an `obsidian://` action. Bare web addresses, wiki links and emphasis still work. Editing such a title sends it back without the added backslashes.
 
 ## What appears
 
@@ -83,7 +83,7 @@ Each device creates only its own new tasks. While a task another device created 
 
 Row deletion follows the rules above, without confirmation:
 
-- Deleting a meeting you organize cancels it for every guest, without notification emails. Guests who do not use Google Calendar may keep a stale copy.
+- Deleting a meeting you organize cancels it for every guest, and Google emails them the cancellation. Deleting an invitation from someone else only removes it from your calendar, without notifying the organizer.
 - Deleting a Google Task assigned to you from Google Docs or Chat also deletes the original assignment there, as Google's Tasks API documents.
 - Title and ✅ / ⬜️ changes on meetings you organize are visible to guests.
 
@@ -103,7 +103,11 @@ Queued work belongs to the device, not to a Google account. After switching acco
 
 ## Privacy and permissions
 
-Google OAuth tokens and the client secret use Obsidian's local `SecretStorage`, outside the plugin's `data.json`. This is Obsidian-managed storage; the plugin does not make its own encryption guarantee. Do not include secrets or personal note data in bug reports.
+Google OAuth tokens and the client secret use Obsidian's local `SecretStorage`, outside the plugin's `data.json`. This is Obsidian-managed storage; the plugin does not make its own encryption guarantee. Every installed plugin can read SecretStorage, so the connection is only as safe as the other plugins in the vault. On a desktop without an operating system keychain, often Linux without a keyring service, Obsidian stores these secrets unencrypted and shows a warning. Do not include secrets or personal note data in bug reports.
+
+Synced rows carry hidden IDs that name the calendar or task list; calendar IDs are often email addresses. Remove those comments before publishing or sharing a note's source.
+
+**Disconnect** revokes the connection at Google and removes it from this device. Devices connected with a setup code share that authorization, so all of them are signed out. Changing the OAuth client ID removes the old client's token from this device.
 
 The plugin contacts Google's authorization and token endpoints, Calendar API, and Tasks API. It sends selected item IDs, edited titles and status, and new task titles, dates, and reconciliation tags. It asks Google only for the fields it uses. Other note text and vault filenames are not sent to Google. There is no telemetry and no external server operated by this plugin.
 

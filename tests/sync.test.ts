@@ -61,6 +61,8 @@ function harness(items: Item[] = [item()], data?: PluginData, text?: string) {
             if (now?.done !== undefined && now.done !== old?.done) edit.done = now.done;
             if (edit.title !== undefined || edit.done !== undefined) edits.push(edit);
         }
+        // The editor gets every key it writes from draftKey(), which records it.
+        for (const key of lines(next).keys()) if (key.startsWith('new:') && !before.has(key)) target.data.drafts[key] ??= state.now;
         state.text = next;
         if (edits.length) target.journalEdits(PATH, edits);
     };
@@ -76,6 +78,56 @@ function harness(items: Item[] = [item()], data?: PluginData, text?: string) {
 }
 
 const rows = (text: string) => text.split('\n').filter(line => / <!-- gdn:[^ ]+ -->$/.test(line) && !/gdn:(events|recurring|tasks) /.test(line));
+
+describe('note content is not authority (2026-10-03 security audits)', () => {
+    const DAY = 24 * 3600000;
+    it('does not create a draft with this device’s owner that this device never issued (Astra S1)', async () => {
+        const h = harness([]);
+        h.state.text = withDraft(EMPTY, 'Injected from an external file', 'new:device:forged');
+        await h.engine.run(PATH, true);
+        expect(h.remote.insert).not.toHaveBeenCalled();
+        expect(h.state.text).toContain('Injected from an external file <!-- gdn:new:device:forged -->');
+    });
+    it('does not edit or delete a task row planted for a list that is not enabled (Fable L1, Astra S2)', async () => {
+        const planted = item({ source: 'disabled-list', id: 'unrelated-task' });
+        const h = harness([]);
+        h.state.text = EMPTY.replace('<!-- gdn:tasks -->\n', `<!-- gdn:tasks -->\n    - [ ] Looks harmless <!-- gdn:${planted.key} -->\n`);
+        expect(h.engine.editorRows(PATH)[planted.key]).toBeUndefined();
+        h.type(h.state.text.replace('- [ ] Looks harmless', '- [x] Renamed'));
+        await h.engine.run(PATH, true);
+        expect(h.remote.patch).not.toHaveBeenCalled();
+        h.state.text = EMPTY.replace('<!-- gdn:tasks -->\n', `<!-- gdn:tasks -->\n    - [ ] Looks harmless <!-- gdn:${planted.key} -->\n`);
+        h.remove(planted.key);
+        h.state.now += 6000;
+        await h.engine.run(PATH, true);
+        expect(h.remote.remove).not.toHaveBeenCalled();
+    });
+    it('still edits a task row another device rendered in an enabled list', async () => {
+        const other = item({ id: 'from-the-phone', title: 'From the phone' });
+        const h = harness([]);
+        h.state.text = EMPTY.replace('<!-- gdn:tasks -->\n', `<!-- gdn:tasks -->\n    - [ ] From the phone <!-- gdn:${other.key} -->\n`);
+        h.type(h.state.text.replace('- [ ] From the phone', '- [x] From the phone'));
+        await h.engine.run(PATH, true);
+        expect(h.remote.patch).toHaveBeenCalledWith(expect.objectContaining({ source: 'list', id: 'from-the-phone', done: true }));
+    });
+    it('keeps syncing a note with a row keyed like an Object.prototype member (Fable L2)', async () => {
+        const h = harness();
+        const planted = ['constructor', '__proto__', 'toString', 'hasOwnProperty'].map(key => `    - [x] Planted ${key} <!-- gdn:${key} -->`).join('\n');
+        h.state.text = h.state.text.replace('<!-- gdn:tasks -->\n', `<!-- gdn:tasks -->\n${planted}\n`);
+        h.items[0]!.title = 'Renamed in Google';
+        const status = await h.engine.run(PATH, true);
+        expect(status.state).toBe('ok');
+        expect(h.state.text).toContain('Renamed in Google');
+        expect(h.state.text).toContain('Planted constructor <!-- gdn:constructor -->');
+    });
+    it('drops the overdue-event list of a calendar not read for 14 days', () => {
+        const h = harness([]);
+        const entry = (scanned: number) => ({ scope: 'Europe/Warsaw', until: '', scanned, watermark: '', events: {} });
+        h.data.calendars = { old: entry(h.state.now - 15 * DAY), fresh: entry(h.state.now - DAY) };
+        h.engine.prune(false, () => true);
+        expect(Object.keys(h.data.calendars)).toEqual(['fresh']);
+    });
+});
 
 describe('journal: only this device’s editor edits reach Google (D1)', () => {
     it('does not push another device’s older title over a newer Google value', async () => {
@@ -300,9 +352,9 @@ describe('task creation', () => {
         expect(h.remote.insert).not.toHaveBeenCalled();
         expect(h.state.text).toContain('- [ ] One intended task\n');
     });
-    it('recreates its own draft from the note when device state was lost', async () => {
+    it('recreates its own draft from the note when its pending creation was lost', async () => {
         const h = harness([]);
-        h.state.text = withDraft(EMPTY, 'Phone draft');
+        h.state.text = withDraft(EMPTY, 'Phone draft', h.engine.draftKey());
         h.data.outbox = {};
         await h.engine.run(PATH, true);
         expect(h.items.filter(value => value.title === 'Phone draft')).toHaveLength(1);

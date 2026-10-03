@@ -98,6 +98,22 @@ describe('Google deletions', () => {
         expect((error as GoogleError).failure).toBe('refused');
         expect(h.requests).toHaveLength(1);
     });
+    it('notifies guests when you delete a meeting you organize, and nobody otherwise', async () => {
+        const own = client([ok({ id: operation.id, organizer: { self: true }, attendees: [{ self: true }, { self: false }] }), { status: 204, json: {} }]);
+        await own.api.remove({ ...operation, remove: true });
+        expect(own.requests[0]!.url).toContain('organizer');
+        expect(own.requests[1]!.url).toMatch(/\?sendUpdates=all$/);
+        const invited = client([ok({ id: operation.id, organizer: { self: false }, attendees: [{ self: true }, { self: false }] }), { status: 204, json: {} }]);
+        await invited.api.remove({ ...operation, remove: true });
+        expect(invited.requests[1]!.url).toMatch(/\?sendUpdates=none$/);
+    });
+    it('refuses to change a recurring series master from a note (Astra S3)', async () => {
+        const h = client([ok({ id: 'master', summary: 'Weekly', etag: 'e', recurrence: ['RRULE:FREQ=WEEKLY'] })]);
+        const error = await h.api.patch({ ...operation, id: 'master', done: undefined, title: 'Changed series title' }).catch((value: unknown) => value);
+        expect(error).toBeInstanceOf(GoogleError);
+        expect((error as GoogleError).failure).toBe('refused');
+        expect(h.requests).toHaveLength(1);
+    });
     it.each([404, 410])('treats an already deleted task as success (%i)', async status => {
         const h = client([{ status, json: {} }]);
         await expect(h.api.remove({ ...operation, kind: 'task', remove: true })).resolves.toBeUndefined();

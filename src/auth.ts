@@ -72,7 +72,9 @@ export class GoogleAuth {
             const missing = Object.entries(SCOPES).filter(([scope]) => !granted.has(scope)).map(([, name]) => name);
             if (missing.length) throw new Error(`Google did not grant access to ${missing.join(' and ')}. Connect again and allow all requested access.`);
         }
-        const tokens: Tokens = { clientId: this.clientId(), access: body.access_token, refresh: body.refresh_token ?? this.read()?.refresh ?? '', expires: Date.now() + body.expires_in * 1000 };
+        // The refresh token this request used, never whatever storage holds by
+        // now: another connection may have replaced it meanwhile.
+        const tokens: Tokens = { clientId: this.clientId(), access: body.access_token, refresh: body.refresh_token ?? values.refresh_token ?? '', expires: Date.now() + body.expires_in * 1000 };
         if (!tokens.refresh) throw new Error('Google did not return offline access. Connect again.');
         this.store(AUTH_KEY, JSON.stringify(tokens));
         this.dead = false;
@@ -84,8 +86,20 @@ export class GoogleAuth {
         if (!saved) throw new Error('Connect your Google account in plugin settings.');
         if (this.dead) throw new ReconnectNeeded();
         if (!force && saved.expires > Date.now() + 60000) return saved.access;
-        this.refreshing ??= this.exchange({ grant_type: 'refresh_token', refresh_token: saved.refresh }).then(value => value.access).finally(() => { this.refreshing = undefined; });
+        if (!this.refreshing) {
+            const refreshing = this.exchange({ grant_type: 'refresh_token', refresh_token: saved.refresh }).then(value => value.access);
+            this.refreshing = refreshing;
+            // A replaced connection already dropped this refresh; keep its successor.
+            void refreshing.finally(() => { if (this.refreshing === refreshing) this.refreshing = undefined; }).catch(() => undefined);
+        }
         return this.refreshing;
+    }
+
+    // A new connection takes over at once. A refresh still running for the old
+    // one can then neither store its token nor mark the new one dead.
+    private replace(): void {
+        this.generation++;
+        this.refreshing = undefined;
     }
 
     async connect(openBrowser = this.openBrowser): Promise<void> {
@@ -134,6 +148,7 @@ export class GoogleAuth {
                 }).toString();
                 void openBrowser(url.toString()).catch(error => finish(error as Error));
             });
+            this.replace();
             await this.exchange({ code, redirect_uri: redirect, grant_type: 'authorization_code', code_verifier: verifier });
         } finally { if (this.server === server) this.dispose(); }
     }
@@ -159,13 +174,37 @@ export class GoogleAuth {
         if (generation !== this.generation || credentials.clientId !== this.clientId()) throw new Error('Google connection changed while signing in.');
         const body = response.json as { access_token: string; expires_in: number; refresh_token?: string };
         if (!body.access_token || !Number.isFinite(body.expires_in)) throw new Error('Google returned an incomplete connection. Try again.');
+        this.replace();
         this.store(CLIENT_SECRET_KEY, credentials.clientSecret);
         this.store(AUTH_KEY, JSON.stringify({ clientId: credentials.clientId, access: body.access_token,
             refresh: body.refresh_token ?? credentials.refresh, expires: Date.now() + body.expires_in * 1000 } satisfies Tokens));
         this.dead = false;
     }
 
-    disconnect(): void {
+    /**
+     * Signs out at Google, not only here. Every device connected with a setup
+     * code shares this authorization, so they are all signed out. Local
+     * credentials go first, so an offline device still forgets them; the
+     * result says whether Google confirmed the revocation.
+     */
+    async disconnect(): Promise<boolean> {
+        const refresh = this.read()?.refresh;
+        this.forget();
+        if (!refresh) return true;
+        try {
+            const response = await this.transport({
+                url: 'https://oauth2.googleapis.com/revoke', method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({ token: refresh }).toString(),
+            });
+            // 400 means the token was already invalid: revoked or expired.
+            return response.status === 200 || response.status === 400;
+        } catch { return false; }
+    }
+
+    // Drops the local credentials, as when the client ID changes: a token
+    // belongs to the client that obtained it and is useless with another.
+    forget(): void {
         this.dispose();
         this.dead = false;
         this.store(AUTH_KEY, '');

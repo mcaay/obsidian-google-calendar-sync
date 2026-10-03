@@ -1,6 +1,6 @@
 {
     "name": "google-daily-notes",
-    "version": "0.9.2",
+    "version": "0.9.3",
     "private": true,
     "description": "Google Calendar and Tasks as editable Markdown in Obsidian daily notes.",
     "scripts": {
@@ -32,5 +32,8 @@
     "repository": {
         "type": "git",
         "url": "git+https://github.com/mcaay/obsidian-google-calendar-sync.git"
+    },
+    "overrides": {
+        "moment": "2.31.0"
     }
 }

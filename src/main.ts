@@ -70,6 +70,7 @@ export default class GoogleDailyNotes extends Plugin {
             indent: () => this.controller.indent(),
             tabWidth: () => this.controller.tabWidth(),
             draftKey: () => engine.draftKey(),
+            foreign: (key, text) => engine.foreignTask(key, text),
             resolve: key => engine.resolve(key),
             changed: (path, vim, toggled) => this.controller.scheduler.changed(path, vim, toggled),
             normal: path => this.controller.scheduler.normal(path),
@@ -102,11 +103,16 @@ export default class GoogleDailyNotes extends Plugin {
         });
         this.registerDomEvent(window, 'online', () => this.controller.resume());
         this.register(() => { this.saveLocal('all'); this.controller.dispose(); this.auth.dispose(); });
-        // An expired setup package can no longer be imported.
-        if (this.data.connectionTransfer && this.data.connectionTransfer.expires <= Date.now()) {
-            delete this.data.connectionTransfer;
-            await this.persist();
-        }
+        // An expired setup package can no longer be imported. Remove it on
+        // time, not only at the next start.
+        await this.dropExpiredTransfer();
+        this.registerInterval(window.setInterval(() => void this.dropExpiredTransfer(), 60000));
+    }
+
+    private async dropExpiredTransfer(): Promise<void> {
+        if (!this.data.connectionTransfer || this.data.connectionTransfer.expires > Date.now()) return;
+        delete this.data.connectionTransfer;
+        await this.persist();
     }
 
     // Returns false when the stored copy does not match what was written.

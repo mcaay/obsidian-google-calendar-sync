@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { dayBounds } from '../src/dates';
 import { eventItem, eventMarker, taskItem } from '../src/items';
 import { initialData, type CalendarChoice, type CalendarEvent } from '../src/types';
+import { itemKey } from '../src/markdown';
 import { DATE } from './fixtures';
 
 const settings = { ...initialData().settings, timeZone: 'Europe/Warsaw' };
@@ -48,6 +49,10 @@ describe('calendar dates and instances', () => {
     it('includes an overnight event on both intersected days', () => {
         const overnight = { ...event, summary: 'Train', start: { dateTime: '2026-09-18T23:00:00+02:00' }, end: { dateTime: '2026-09-19T02:00:00+02:00' } };
         expect(eventItem(overnight, calendar, DATE, at(DATE), settings, [])).toBeDefined();
+    });
+    it('never turns a recurring series master into a row, even when a note retains its key', () => {
+        const master: CalendarEvent = { ...event, id: 'master', start: { dateTime: '2026-01-05T13:00:00+01:00' }, end: { dateTime: '2026-01-05T14:00:00+01:00' }, recurrence: ['RRULE:FREQ=WEEKLY'] };
+        expect(eventItem(master, calendar, DATE, at(DATE), settings, [itemKey('event', 'calendar', 'master')])).toBeUndefined();
     });
     it('excludes cancellations', () => expect(eventItem({ ...event, status: 'cancelled' }, calendar, DATE, at(DATE), settings, [])).toBeUndefined());
     it('accepts markers with or without variation selectors', () => {

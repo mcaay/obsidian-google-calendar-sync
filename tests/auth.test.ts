@@ -118,16 +118,48 @@ describe('OAuth token management', () => {
         expect(h.transport).toHaveBeenCalledOnce();
         expect(JSON.parse(h.values.get('google-daily-notes-oauth')!).refresh).toBe('refresh');
     });
-    it('clears authorization on disconnect', async () => {
-        const h = setup(0); h.auth.disconnect(); expect(h.auth.connected()).toBe(false);
+    it('revokes the connection at Google and clears it on disconnect', async () => {
+        const h = setup(0);
+        expect(await h.auth.disconnect()).toBe(true);
+        expect(h.auth.connected()).toBe(false);
+        expect(h.transport).toHaveBeenCalledWith(expect.objectContaining({ url: 'https://oauth2.googleapis.com/revoke', method: 'POST', body: 'token=refresh' }));
         await expect(h.auth.token()).rejects.toThrow('Connect');
+    });
+    it('still forgets the connection when Google cannot be reached to revoke it', async () => {
+        const h = setup(0);
+        h.transport.mockRejectedValueOnce(new Error('offline'));
+        expect(await h.auth.disconnect()).toBe(false);
+        expect(h.auth.connected()).toBe(false);
+    });
+    it('forgets a token that belongs to a previous client ID', () => {
+        const h = setup(Date.now() + 120000);
+        h.auth.forget();
+        expect(h.auth.connected()).toBe(false);
+        expect(h.values.get('google-daily-notes-oauth')).toBe('');
+        expect(h.transport).not.toHaveBeenCalled();
+    });
+    it('cannot let a refresh that finishes after an import overwrite the imported connection (Astra S4)', async () => {
+        const client = 'test.apps.googleusercontent.com';
+        const values = new Map<string, string>([['google-daily-notes-oauth', JSON.stringify({ clientId: client, access: 'access-a', refresh: 'refresh-a', expires: 0 })]]);
+        const secrets = { getSecret: (key: string) => values.get(key) ?? null, setSecret: (key: string, value: string) => values.set(key, value) } as unknown as SecretStorage;
+        let finish!: () => void;
+        const transport = vi.fn(async (_request: unknown) => ({ status: 200, json: { access_token: 'access-b', expires_in: 3600 } }));
+        transport.mockImplementationOnce(() => new Promise(resolve => { finish = () => resolve({ status: 200, json: { access_token: 'late-access-a', expires_in: 3600 } }); }));
+        const auth = new GoogleAuth(secrets, () => client, transport, async () => undefined);
+        const pending = auth.token();
+        const { transfer, code } = await encryptConnection({ clientId: client, clientSecret: 'secret', refresh: 'refresh-b' });
+        await auth.importConnection(transfer, code);
+        finish();
+        await expect(pending).rejects.toThrow('connection changed');
+        expect(JSON.parse(values.get('google-daily-notes-oauth')!)).toMatchObject({ access: 'access-b', refresh: 'refresh-b' });
+        expect(await auth.token()).toBe('access-b');
     });
     it('cannot restore credentials after disconnect during a refresh', async () => {
         const h = setup(0);
         let finish!: () => void;
         h.transport.mockImplementationOnce(() => new Promise(resolve => { finish = () => resolve({ status: 200, json: { access_token: 'late-token', expires_in: 3600 } }); }));
         const pending = h.auth.token();
-        h.auth.disconnect(); finish();
+        void h.auth.disconnect(); finish();
         await expect(pending).rejects.toThrow('connection changed');
         expect(h.auth.connected()).toBe(false);
     });

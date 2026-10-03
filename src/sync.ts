@@ -180,10 +180,9 @@ export class SyncEngine {
     }
 
     owns(key: string): boolean {
-        // Drafts from versions before 0.9 carry no owner; only the device that
-        // journaled them may create them.
-        return Boolean(this.data.runtimeOwner && key.startsWith(`new:${this.data.runtimeOwner}:`))
-            || Boolean(this.data.outbox[key]?.create) || Boolean(this.data.created[key]);
+        // Only a key this device issued is its draft. The owner prefix in a key
+        // is visible in synced notes, so a copied or forged key proves nothing.
+        return Object.hasOwn(this.data.drafts, key) || Boolean(this.data.outbox[key]?.create) || Boolean(this.data.created[key]);
     }
 
     // The row key a stale key refers to now: after a late-undo replacement,
@@ -200,9 +199,13 @@ export class SyncEngine {
     }
 
     // The key records when the draft was made, so a stale copy of a note
-    // arriving after its created ID was pruned is never created again.
+    // arriving after its created ID was pruned is never created again. The
+    // journal records the key at once, which is what makes it this device's.
     draftKey(): string {
-        return `new:${this.data.runtimeOwner ? this.data.runtimeOwner + ':' : ''}${this.now().toString(36)}_${crypto.randomUUID()}`;
+        const key = `new:${this.data.runtimeOwner ? this.data.runtimeOwner + ':' : ''}${this.now().toString(36)}_${crypto.randomUUID()}`;
+        this.data.drafts[key] = this.now();
+        this.persist('journal');
+        return key;
     }
 
     private stale(key: string): boolean {
@@ -216,11 +219,13 @@ export class SyncEngine {
     }
 
     // A task row another device rendered has no local snapshot yet. Its key
-    // names the task, so it can still be edited or deleted.
-    private foreignTask(key: string, text?: string): Item | undefined {
+    // names the task, so it can still be edited or deleted, but only in a list
+    // enabled here: a key planted in a note must not reach any other list.
+    foreignTask(key: string, text?: string): Item | undefined {
         const target = parseItemKey(key);
         const visible = text === undefined ? undefined : visibleRow(text);
         if (target?.kind !== 'task' || !visible) return undefined;
+        if (!this.data.settings.taskLists.some(list => list.enabled && list.id === target.source)) return undefined;
         return { key, kind: 'task', source: target.source, id: target.id, section: 'tasks', title: visible.title.trim(), done: visible.done ?? false, prefix: '', date: '', writable: true, sort: '' };
     }
 
@@ -711,6 +716,8 @@ export class SyncEngine {
      * - A created ID goes 14 days after its marker was removed. A stale copy
      *   of that draft is then not relinked; the key's age keeps it from being
      *   created again.
+     * - An issued draft key goes after 14 days, and so does the overdue-event
+     *   list of a calendar that was not read for 14 days.
      */
     prune(restarted: boolean, exists: (path: string) => boolean): void {
         const now = this.now();
@@ -727,6 +734,11 @@ export class SyncEngine {
         for (const [path, state] of Object.entries(this.data.notes)) {
             if (!paths.has(path) && (!exists(path) || now - (state.synced ?? now) > RETENTION)) delete this.data.notes[path];
         }
+        // A draft this old is never created anyway (stale()), and an
+        // overdue-event list not read for as long belongs to a calendar no
+        // longer in use.
+        for (const [key, issued] of Object.entries(this.data.drafts)) if (now - issued > RETENTION) delete this.data.drafts[key];
+        for (const [id, entry] of Object.entries(this.data.calendars)) if (!(now - entry.scanned <= RETENTION)) delete this.data.calendars[id];
         const records = Object.values(this.data.deletedTasks);
         for (const [key, created] of Object.entries(this.data.created)) {
             if (!created.markerRemoved || now - (created.at ?? now) < RETENTION || pending.has(key) || records.some(record => record.restoredKey === key || record.deletionKey === key)) continue;

@@ -10,7 +10,9 @@ export function eventMarker(summary: string): { title: string; done?: boolean } 
 }
 
 export function eventItem(event: CalendarEvent, calendar: CalendarChoice, date: string, bounds: { start: string; end: string }, settings: Settings, retained: string[]): Item | undefined {
-    if (event.status === 'cancelled') return undefined;
+    // Listings return occurrences. A series master can arrive only through a
+    // retained key a note supplied; editing it would change every occurrence.
+    if (event.status === 'cancelled' || (event.recurrence?.length && !event.recurringEventId)) return undefined;
     const start = event.start.dateTime;
     const zoned = start ? inZone(start, settings.timeZone) : undefined;
     const startDate = event.start.date ?? zoned?.date;

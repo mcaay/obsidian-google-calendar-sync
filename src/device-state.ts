@@ -32,7 +32,7 @@ export function restoreDeviceState(shared: Partial<PluginData> | null, local: Pa
         Object.assign(data, { runtimeOwner: local.runtimeOwner, notes: local.notes ?? {}, created: local.created ?? {}, calendars: local.calendars ?? {} });
         // 0.9.0 kept pending work inside the device state.
         const pending = local.version === VERSION ? journal : local;
-        Object.assign(data, { edits: pending?.edits ?? {}, outbox: pending?.outbox ?? {}, deletedTasks: pending?.deletedTasks ?? {}, aliases: pending?.aliases ?? {} });
+        Object.assign(data, { edits: pending?.edits ?? {}, outbox: pending?.outbox ?? {}, deletedTasks: pending?.deletedTasks ?? {}, aliases: pending?.aliases ?? {}, drafts: pending?.drafts ?? {} });
     } else {
         // Only the original desktop may migrate the old, unowned outbox.
         if (!mobile && !shared?.runtimeOwner && shared?.version !== 2) {
@@ -83,7 +83,7 @@ export function deviceSnapshot(data: PluginData): DeviceSnapshot {
 }
 
 export function journalSnapshot(data: PluginData): JournalSnapshot {
-    return { version: VERSION, edits: data.edits, outbox: data.outbox, deletedTasks: data.deletedTasks, aliases: data.aliases };
+    return { version: VERSION, edits: data.edits, outbox: data.outbox, deletedTasks: data.deletedTasks, aliases: data.aliases, drafts: data.drafts };
 }
 
 export function sharedSnapshot(data: PluginData): Pick<PluginData, 'version' | 'settings' | 'connectionTransfer'> {

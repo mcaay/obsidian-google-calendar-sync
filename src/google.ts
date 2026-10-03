@@ -285,8 +285,12 @@ export class GoogleClient implements Remote {
             let body: Record<string, unknown>;
             let etag: string | undefined;
             if (operation.kind === 'event') {
-                const current = await this.request<CalendarEvent>(`${url}?fields=id,summary,status,etag`);
+                const current = await this.request<CalendarEvent>(`${url}?fields=id,summary,status,etag,recurrence,recurringEventId`);
                 if (current.status === 'cancelled') throw new GoogleError(410);
+                // Like remove(): a note may change one occurrence, never a series.
+                if (current.recurrence?.length && !current.recurringEventId) {
+                    throw new GoogleError(400, 'recurringSeries', undefined, 'Only one occurrence of a recurring event can be changed from a note.');
+                }
                 // Always use the instance ID, never recurringEventId.
                 const parsed = eventMarker(current.summary ?? '');
                 const done = operation.done ?? parsed.done;
@@ -349,16 +353,20 @@ export class GoogleClient implements Remote {
             ? `${CALENDAR}/calendars/${enc(operation.source)}/events/${enc(operation.id)}`
             : `${TASKS}/lists/${enc(operation.source)}/tasks/${enc(operation.id)}`;
         try {
+            let notify = false;
             if (operation.kind === 'event') {
-                const current = await this.request<CalendarEvent>(`${url}?fields=id,status,recurrence,recurringEventId`);
+                const current = await this.request<CalendarEvent>(`${url}?fields=id,status,recurrence,recurringEventId,organizer(self),attendees(self)`);
                 if (current.status === 'cancelled') return;
                 // Daily rows use events.list(singleEvents=true) instance IDs.
                 // Never allow a stale or malformed row to delete a whole series.
                 if (current.recurrence?.length && !current.recurringEventId) {
                     throw new GoogleError(400, 'recurringSeries', undefined, 'Only one occurrence of a recurring event can be deleted from a note.');
                 }
+                // Deleting a meeting you organize cancels it for its guests, so
+                // Google tells them. Leaving someone else's invitation stays quiet.
+                notify = current.organizer?.self === true && (current.attendees ?? []).some(attendee => !attendee.self);
             }
-            await this.request(url + (operation.kind === 'event' ? '?sendUpdates=none' : ''), 'DELETE');
+            await this.request(url + (operation.kind === 'event' ? `?sendUpdates=${notify ? 'all' : 'none'}` : ''), 'DELETE');
         } catch (error) {
             // Retrying a successful deletion whose response was lost is safe.
             if (error instanceof GoogleError && error.failure === 'gone') return;

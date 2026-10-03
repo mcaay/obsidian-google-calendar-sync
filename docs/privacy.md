@@ -5,7 +5,7 @@ title: Privacy policy
 
 # Privacy policy
 
-Updated: 26 September 2026
+Updated: 3 October 2026
 
 This policy describes **Calendar Sync by mcaay**, an Obsidian plugin.
 
@@ -29,7 +29,7 @@ The plugin does not send other note text, vault filenames, or the contents of yo
 
 ## Local storage and retention
 
-Synced rows are stored in your Markdown notes. The plugin's `data.json` stores source selections and shared settings. Each device keeps item snapshots, note paths, pending requests, undo state, and a list of unchecked marked calendar events from earlier days (titles, times and identifiers) in vault-specific local storage, separate from Obsidian Sync. Older versions stored this state in `data.json`; upgrading migrates the original desktop's pending work before removing runtime state from that file. OAuth tokens and the OAuth client secret are stored through Obsidian SecretStorage, separately from `data.json`. This is Obsidian-managed storage; the plugin does not provide its own encryption of your vault or guarantee that every storage location is encrypted.
+Synced rows are stored in your Markdown notes. The plugin's `data.json` stores source selections and shared settings. Each device keeps item snapshots, note paths, pending requests, undo state, and a list of unchecked marked calendar events from earlier days (titles, times and identifiers) in vault-specific local storage, separate from Obsidian Sync. Older versions stored this state in `data.json`; upgrading migrates the original desktop's pending work before removing runtime state from that file. OAuth tokens and the OAuth client secret are stored through Obsidian SecretStorage, separately from `data.json`. This is Obsidian-managed storage; the plugin does not provide its own encryption of your vault or guarantee that every storage location is encrypted. Every installed Obsidian plugin can read SecretStorage, and on a desktop without an operating system keychain Obsidian stores it unencrypted. Synced rows in your notes carry hidden calendar and task list identifiers, which are often email addresses.
 
 Your notes remain until you remove them. Pending work stays on the device until it is sent. The plugin removes its other device state when it is no longer needed: undo records after Obsidian restarts, note snapshots after 14 days without a sync, and created task identifiers 14 days after the task's reconciliation tag was removed. Your own vault synchronization, backups, publishing settings, other plugins, and device access can affect who can access local files. Those services and settings are outside this plugin's control.
 
@@ -37,7 +37,7 @@ Your notes remain until you remove them. Pending work stays on the device until 
 
 Selecting **Create setup code** encrypts the Google refresh token and OAuth client configuration with AES-GCM using a random 100-bit setup code. Only the encrypted package is written to `data.json` for Obsidian Sync to carry to your other device. The setup code is shown locally and never saved by the plugin. The receiving device verifies the connection with Google and stores its credentials in SecretStorage.
 
-Import removes the package from the current plugin settings. Sync history and backups can retain encrypted copies. The plugin rejects imports after 30 minutes, but this is not a Google token expiry or a guarantee that historical ciphertext becomes undecryptable. Keep the setup code private; revoking the app in Google invalidates the underlying Google authorization.
+Import removes the package from the current plugin settings. Sync history and backups can retain encrypted copies. The plugin rejects imports after 30 minutes, but this is not a Google token expiry or a guarantee that historical ciphertext becomes undecryptable. Keep the setup code private and type it on the other device rather than copying it, since clipboard history can keep a copy. Revoking the app in Google invalidates the underlying Google authorization.
 
 ## Sharing and other uses
 
@@ -47,9 +47,7 @@ Calendar Sync by mcaay's use and transfer of information received from Google AP
 
 ## Disconnecting and deleting data
 
-Select **Disconnect** in the plugin settings to remove locally stored OAuth tokens and stop authenticated synchronization. This does not remove the OAuth client secret, existing Markdown rows, cached synchronization state, pending edits, or data in Google.
-
-To revoke the Google authorization, remove the app from your [Google account connections](https://myaccount.google.com/connections). To remove local copies, disable the plugin, remove its synced Markdown rows and plugin data, clear its device state as described in the [behavior reference](behavior.md#pending-work-on-this-device), and clear its client secret from Obsidian SecretStorage. Remove copies from your backups or other vault storage services if desired. Removing local data while the plugin is disabled does not delete events or tasks from Google. While enabled, explicitly deleting a synced row in Obsidian sends a deletion request to Google.
+Select **Disconnect** in the plugin settings to revoke the plugin's Google authorization, remove locally stored OAuth tokens and clear the device's list of overdue calendar events. Devices connected with a setup code share that authorization, so all of them are signed out. If Google cannot be reached, the device still forgets its tokens and a notice asks you to remove the app from your [Google account connections](https://myaccount.google.com/connections). Disconnect does not remove the OAuth client secret, existing Markdown rows, note snapshots, pending edits, or data in Google. To remove local copies, disable the plugin, remove its synced Markdown rows and plugin data, clear its device state as described in the [behavior reference](behavior.md#pending-work-on-this-device), and clear its client secret from Obsidian SecretStorage. Remove copies from your backups or other vault storage services if desired. Removing local data while the plugin is disabled does not delete events or tasks from Google. While enabled, explicitly deleting a synced row in Obsidian sends a deletion request to Google.
 
 ## This documentation site and contact
 

@@ -2,7 +2,7 @@ import { Annotation, EditorSelection, EditorState, StateEffect, StateField, Tran
 import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate } from '@codemirror/view';
 import { invertedEffects } from '@codemirror/commands';
 import { editorInfoField, editorLivePreviewField, Keymap, MarkdownView, type KeymapEventHandler, type Scope } from 'obsidian';
-import { BLOCKED, checkEdit, lineChanges, noteDate, parseItemKey, readRow, regions, ROW_ID, rowKey, splitsRow, syncedRows, visibleRow, type Region, type RowRef } from './markdown';
+import { BLOCKED, checkEdit, lineChanges, noteDate, readRow, regions, ROW_ID, rowKey, splitsRow, syncedRows, visibleRow, type Region, type RowRef } from './markdown';
 import type { Edit, Item } from './types';
 
 // The plugin's own writes: renders, row-history replays and key rewrites.
@@ -35,6 +35,8 @@ export interface EditorHooks {
     indent(): string;
     tabWidth(): number;
     draftKey(): string;
+    // A task row another device rendered, editable only in an enabled list.
+    foreign(key: string, text: string): Item | undefined;
     resolve(key: string): string;
     changed(path: string, vim: boolean, toggled: boolean): void;
     normal(path: string): void;
@@ -87,8 +89,8 @@ function local(transaction: Transaction): boolean {
 function editorRows(path: string, doc: Text, hooks: EditorHooks): Record<string, Item> {
     const rows = { ...hooks.rows(path) };
     for (const row of rowsOf(doc, hooks)) {
-        const target = rows[row.key] ? undefined : parseItemKey(row.key);
-        if (target?.kind === 'task') rows[row.key] = { key: row.key, kind: 'task', source: target.source, id: target.id, section: 'tasks', title: '', done: visibleRow(row.line.text)?.done ?? false, prefix: '', date: '', writable: true, sort: '' };
+        const foreign = rows[row.key] ? undefined : hooks.foreign(row.key, row.line.text);
+        if (foreign) rows[row.key] = foreign;
     }
     return rows;
 }

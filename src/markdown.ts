@@ -130,8 +130,12 @@ export function parseItemKey(key: string): { kind: Kind; source: string; id: str
     return undefined;
 }
 
+// Notes can be written by other devices, plugins and people. Only the
+// plugin's own key forms count as row identities; anything else, such as
+// `constructor`, stays plain text and never reaches a lookup table.
 export function rowKey(line: string): string | undefined {
-    return ROW_ID.exec(line)?.[1];
+    const key = ROW_ID.exec(line)?.[1];
+    return key && (SECTIONS.includes(key as Section) || key.startsWith('new:') || parseItemKey(key)) ? key : undefined;
 }
 
 export function visibleRow(line: string): { title: string; done?: boolean } | undefined {
@@ -156,21 +160,25 @@ export function isTaskRow(region: Region, line: Line, tabWidth = 4): boolean {
 }
 
 /**
- * Google titles are plain text; note text is Markdown. Titles from Google
- * escape HTML, embeds and inline code with backslashes, so an invitation or an
- * assigned task cannot make a note load remote content. Links and emphasis
- * still work. googleTitle() undoes only these sequences, so any other backslash
- * a user types reaches Google unchanged.
- * Ordinary: `![](https://x/p.png)` becomes `\![](https://x/p.png)`, a link.
- * Tricky: `a\<b` becomes `a\\\<b` and returns to Google as `a\<b`.
+ * Google titles are plain text; note text is Markdown. Anyone can send an
+ * invitation and colleagues can assign tasks, so titles from Google escape
+ * HTML, embeds, inline code, Markdown links, math and comments with
+ * backslashes: a title cannot load remote content, run code, hide the rest of
+ * the note or become a clickable `obsidian://` action. Bare web addresses and
+ * emphasis still work. googleTitle() undoes only these sequences, so any other
+ * backslash a user types reaches Google unchanged.
+ * Ordinary: `[Join](obsidian://new?…)` becomes `[Join]\(obsidian://new?…)`, text.
+ * Tricky: `a]\(b` becomes `a]\\(b` and returns to Google as `a]\(b`.
  */
 export function cleanTitle(title: string): string {
     const flat = title.replace(/[\r\n]+/g, ' ').trim();
     let result = '';
     for (let index = 0; index < flat.length; index++) {
         const character = flat[index]!;
-        const special = (at: number) => flat[at] === '<' || flat[at] === '`' || (flat[at] === '!' && flat[at + 1] === '[');
-        if (special(index) || (character === '\\' && (flat[index + 1] === '\\' || special(index + 1)))) result += '\\';
+        const special = (at: number) => '<`$%'.includes(flat[at] ?? 'x') || (flat[at] === '!' && flat[at + 1] === '[') || (flat[at] === '(' && flat[at - 1] === ']');
+        // A backslash between `]` and `(` is escaped too, or it would read as ours.
+        const escapes = character === '\\' && (flat[index + 1] === '\\' || special(index + 1) || (flat[index - 1] === ']' && flat[index + 1] === '('));
+        if (special(index) || escapes) result += '\\';
         result += character;
     }
     return result;
@@ -179,7 +187,15 @@ export function cleanTitle(title: string): string {
 export function googleTitle(title: string): string {
     // Earlier versions escaped only comment delimiters this way.
     const legacy = title.replace(/&lt;!--/g, '<!--').replace(/--&gt;/g, '-->');
-    return legacy.replace(/\\(\\|<|`|!(?=\[))/g, '$1');
+    let result = '';
+    for (let index = 0; index < legacy.length; index++) {
+        const next = legacy[index + 1];
+        const escaped = legacy[index] === '\\' && next !== undefined
+            && ('\\<`$%'.includes(next) || (next === '!' && legacy[index + 2] === '[') || (next === '(' && legacy[index - 1] === ']'));
+        if (escaped) index++;
+        result += legacy[index];
+    }
+    return result;
 }
 
 export function renderRow(item: Item, indent: string): string {

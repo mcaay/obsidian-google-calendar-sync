@@ -72,6 +72,7 @@ class Note {
         indent: () => '    ',
         tabWidth: () => 4,
         draftKey: () => this.engine.draftKey(),
+        foreign: (key: string, text: string) => this.engine.foreignTask(key, text),
         resolve: key => this.engine.resolve(key),
         changed: () => undefined,
         normal: () => undefined,

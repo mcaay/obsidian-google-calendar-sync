@@ -107,6 +107,9 @@ export interface Journal {
     deletedTasks: Record<string, DeletedTask>;
     // Row keys replaced after a late undo, so native undo and redo still map.
     aliases: Record<string, string>;
+    // Draft keys this device issued, with the time. Only these become new
+    // tasks; a key copied into a note from elsewhere stays local.
+    drafts: Record<string, number>;
 }
 
 export interface CalendarCache {
@@ -137,7 +140,7 @@ export interface PluginData extends Journal {
 export function initialData(): PluginData {
     return {
         version: 2, settings: structuredClone(DEFAULT_SETTINGS), notes: {}, created: {}, calendars: {},
-        edits: {}, outbox: {}, deletedTasks: {}, aliases: {},
+        edits: {}, outbox: {}, deletedTasks: {}, aliases: {}, drafts: {},
     };
 }
 
@@ -151,6 +154,9 @@ export interface CalendarEvent {
     recurrence?: string[];
     start: { date?: string; dateTime?: string; timeZone?: string };
     end: { date?: string; dateTime?: string };
+    // Read only before a deletion, to notify the guests of your own meeting.
+    organizer?: { self?: boolean };
+    attendees?: { self?: boolean }[];
 }
 
 export interface GoogleTask {

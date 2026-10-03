@@ -38,6 +38,7 @@ function load(store: (key: string, value: unknown) => void, local = new Map<stri
         addSettingTab() {}
         addCommand() {}
         registerDomEvent() {}
+        registerInterval() {}
         register() {}
         async saveData() {}
     }
@@ -46,7 +47,7 @@ function load(store: (key: string, value: unknown) => void, local = new Map<stri
     runInNewContext(bundle, {
         module: runtimeModule, exports: runtimeModule.exports,
         crypto, TextEncoder, TextDecoder, btoa, atob, structuredClone, URL, URLSearchParams, setTimeout, clearTimeout, performance,
-        window: { setTimeout, clearTimeout }, document: {},
+        window: { setTimeout, clearTimeout, setInterval, clearInterval }, document: {},
         require: (id: string) => {
             if (id === 'obsidian') {
                 return { Plugin, PluginSettingTab: class {}, Platform: { isMobile: true, isDesktop: false }, setTooltip: (_el: unknown, text: string) => tooltips.push(text), Notice: class { constructor(message: string) { notices.push(message); } }, MarkdownView: class {}, TFile: class {} };
