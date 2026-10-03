@@ -7,52 +7,41 @@ title: Privacy policy
 
 Updated: 3 October 2026
 
-This policy describes **Calendar Sync by mcaay**, an Obsidian plugin.
+This policy covers **Calendar Sync by mcaay**, an Obsidian plugin.
 
-## Google data accessed and used
+## What it reads and why
 
-After you authorize access, the plugin retrieves calendar names, identifiers, and access permissions, and Google Tasks list names and identifiers so you can select sources. For selected sources, it requests event and task records to display scheduled items in daily notes and synchronize edits. It uses event titles, identifiers, start and end dates and times, status, modification times, and recurrence instance information, plus task titles, identifiers, due dates, completion status, and notes used to recognize tasks it created. It asks Google only for these fields.
+With your permission, the plugin reads your calendar and task list names. For the calendars and lists you select, it reads event and task titles, IDs, dates, times, status and recurrence instances, and task notes, only to recognize tasks it created. Before deleting an event, it checks whether you organize it and whether it has guests. It uses this data only to show and sync items in your daily notes.
 
-The plugin requests these Google permissions:
+- `calendar.calendarlist.readonly`: list your calendars.
+- `calendar.events`: read events, change their titles and ⬜️ / ✅ markers, delete single events or occurrences. It never creates events or deletes whole series.
+- `tasks`: read, rename, complete, create and delete tasks.
 
-- `calendar.calendarlist.readonly`: list available calendars and their access permissions.
-- `calendar.events`: read events, update edited titles and title-based completion markers, and delete individual events or recurring occurrences when their rows are deleted in Obsidian. The plugin does not create events, delete whole recurring calendar series, or change scheduling or recurrence.
-- `tasks`: read, rename, complete, reopen, create, and delete tasks.
+## What it sends
 
-These Google permissions allow broader operations than the plugin implements. The plugin uses Google data only to provide its visible calendar and task synchronization features.
+Only requests to Google, over HTTPS: the IDs, titles and status of items you edit, deletions, and new task titles and dates. New tasks carry a short tag in their notes until linked. Other note text, file names and vault contents are never sent. Sign-in returns to a temporary listener on your own device.
 
-## Data sent to Google
+There is no developer server, telemetry or advertising, and Google data is never sold, shared, sent to AI services or used for model training. Calendar Sync by mcaay's use and transfer of information received from Google APIs adheres to the [Google API Services User Data Policy](https://developers.google.com/terms/api-services-user-data-policy), including the Limited Use requirements.
 
-The plugin sends authorization credentials to Google's OAuth endpoints and authenticated requests to Google's Calendar and Tasks APIs. Synchronization requests include the relevant calendar, list, event, or task identifiers; edited titles and completion status; deletion requests; and new task titles and due dates. New tasks briefly receive a unique reconciliation tag in their Google task notes to help prevent duplicate creation. The tag is removed once the Google task ID is saved locally, preserving user descriptions.
+## Where data is stored
 
-The plugin does not send other note text, vault filenames, or the contents of your vault to Google. Google processes API requests under its own policies. Communication with Google uses HTTPS; the browser sign-in callback uses a temporary HTTP listener restricted to your own device's loopback interface.
+- **Synced rows:** in your notes. Their hidden IDs include calendar IDs, which are often email addresses.
+- **Settings and calendar IDs:** the plugin's `data.json`.
+- **Pending edits, snapshots and undo records:** each device's Obsidian local storage. Pending work stays until sent; the rest is removed when no longer needed.
+- **Tokens and client secret:** Obsidian SecretStorage. Other installed plugins can read it, and a desktop without an operating system keychain stores it unencrypted.
 
-## Local storage and retention
-
-Synced rows are stored in your Markdown notes. The plugin's `data.json` stores source selections and shared settings. Each device keeps item snapshots, note paths, pending requests, undo state, and a list of unchecked marked calendar events from earlier days (titles, times and identifiers) in vault-specific local storage, separate from Obsidian Sync. Older versions stored this state in `data.json`; upgrading migrates the original desktop's pending work before removing runtime state from that file. OAuth tokens and the OAuth client secret are stored through Obsidian SecretStorage, separately from `data.json`. This is Obsidian-managed storage; the plugin does not provide its own encryption of your vault or guarantee that every storage location is encrypted. Every installed Obsidian plugin can read SecretStorage, and on a desktop without an operating system keychain Obsidian stores it unencrypted. Synced rows in your notes carry hidden calendar and task list identifiers, which are often email addresses.
-
-Your notes remain until you remove them. Pending work stays on the device until it is sent. The plugin removes its other device state when it is no longer needed: undo records after Obsidian restarts, note snapshots after 14 days without a sync, and created task identifiers 14 days after the task's reconciliation tag was removed. Your own vault synchronization, backups, publishing settings, other plugins, and device access can affect who can access local files. Those services and settings are outside this plugin's control.
+Your sync service, backups and other plugins decide who else can read your vault.
 
 ## Connecting another device
 
-Selecting **Create setup code** encrypts the Google refresh token and OAuth client configuration with AES-GCM using a random 100-bit setup code. Only the encrypted package is written to `data.json` for Obsidian Sync to carry to your other device. The setup code is shown locally and never saved by the plugin. The receiving device verifies the connection with Google and stores its credentials in SecretStorage.
+**Create setup code** encrypts the connection with a random 100-bit code (AES-GCM) into `data.json`, for Obsidian Sync to carry. The code is never saved; type it on the other device. The package is removed after import or 30 minutes, but Sync history and backups may keep encrypted copies.
 
-Import removes the package from the current plugin settings. Sync history and backups can retain encrypted copies. The plugin rejects imports after 30 minutes, but this is not a Google token expiry or a guarantee that historical ciphertext becomes undecryptable. Keep the setup code private and type it on the other device rather than copying it, since clipboard history can keep a copy. Revoking the app in Google invalidates the underlying Google authorization.
+## Disconnecting and deleting
 
-## Sharing and other uses
+**Disconnect** revokes access at Google and removes the tokens, which signs out every device connected with a setup code. You can also revoke access in your [Google account connections](https://myaccount.google.com/connections). To remove the rest, delete the plugin's rows, its `data.json` and its client secret in Obsidian's keychain, and [clear its device state](behavior.md#device-state). Nothing in Google is deleted.
 
-The plugin has no developer-operated synchronization server and does not transmit Google user data to its maintainer. It has no telemetry or advertising. It does not sell Google user data, use it for advertising, or send it to AI services or use it for model training.
+## Contact
 
-Calendar Sync by mcaay's use and transfer of information received from Google APIs adheres to the [Google API Services User Data Policy](https://developers.google.com/terms/api-services-user-data-policy), including the Limited Use requirements.
-
-## Disconnecting and deleting data
-
-Select **Disconnect** in the plugin settings to revoke the plugin's Google authorization, remove locally stored OAuth tokens and clear the device's list of overdue calendar events. Devices connected with a setup code share that authorization, so all of them are signed out. If Google cannot be reached, the device still forgets its tokens and a notice asks you to remove the app from your [Google account connections](https://myaccount.google.com/connections). Disconnect does not remove the OAuth client secret, existing Markdown rows, note snapshots, pending edits, or data in Google. To remove local copies, disable the plugin, remove its synced Markdown rows and plugin data, clear its device state as described in the [behavior reference](behavior.md#pending-work-on-this-device), and clear its client secret from Obsidian SecretStorage. Remove copies from your backups or other vault storage services if desired. Removing local data while the plugin is disabled does not delete events or tasks from Google. While enabled, explicitly deleting a synced row in Obsidian sends a deletion request to Google.
-
-## This documentation site and contact
-
-GitHub hosts these public documentation pages. Visits to the site are subject to [GitHub's privacy statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement). The site adds no analytics or advertising scripts and has no Google account connection of its own.
-
-For questions, contact the maintainer through the GitHub repository linked on the [app homepage](index.html). Public issue reports are visible to others, so do not include private data or credentials. This policy will be updated when the plugin's data practices change.
+Open an issue in the [GitHub repository](https://github.com/mcaay/obsidian-google-calendar-sync), without private data. GitHub hosts this site under [its privacy statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement); the site has no analytics.
 
 [Home](index.html) · [Terms of use](terms.html)

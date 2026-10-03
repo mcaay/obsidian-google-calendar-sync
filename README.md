@@ -51,7 +51,7 @@ Use `YYYY-MM-DD` filenames. Rename or move the three headings wherever you want;
 
 - Google Tasks' API exposes dates, but no reminder times or recurrence controls. A typed `📅 13:00` stays in the title. Deleting an entire repeating task series cannot be guaranteed.
 - Undo after the 5-second window recreates a Google Task without its recurrence or reminder time. It cannot restore a deleted Calendar event.
-- Only edits made in Obsidian's editor reach Google. A change that arrives through Sync, another app or a plugin that writes the file shows Google's value again at the next sync.
+- Only edits made in Obsidian's editor reach Google. A change that arrives through other means, e.g. Obsidian Sync to another device, does not trigger a second push to Google. So in other words the device where you made the change pushes the change to Google. The second device with Obsidian gets the change via Obsidian Sync and doesn't push to Google. This way the syncing stays sane and good.
 - Deleting a meeting you organize cancels it for all guests, and Google emails them the cancellation.
 - If Google's answer to a new task is lost, the plugin searches for the task before sending it again. Rarely, this still leaves a duplicate, which shows in the note.
 
